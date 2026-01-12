@@ -2,8 +2,8 @@
 import React, { useState } from 'react';
 import { User, UserRole, MaintenanceTicket, TicketStatus, TicketPriority, NotificationType } from '../types';
 import { getStore, saveStore } from '../store';
-import { analyzeMaintenanceRequest } from '../services/geminiService';
-import { Plus, CheckCircle2, Clock, AlertCircle, Sparkles, Loader2, Wrench, MoreHorizontal, Settings2 } from 'lucide-react';
+// Added ChevronDown to the lucide-react imports
+import { Plus, CheckCircle2, Clock, AlertCircle, Wrench, X, ChevronDown } from 'lucide-react';
 
 interface MaintenanceProps {
   user: User;
@@ -18,199 +18,129 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newIssue, setNewIssue] = useState('');
-  const [isAiProcessing, setIsAiProcessing] = useState(false);
 
   const handleSubmit = async () => {
     if (!newIssue) return;
-    setIsAiProcessing(true);
+    setIsSubmitting(true);
     
-    // AI Enhancement
-    const analysis = await analyzeMaintenanceRequest(newIssue);
+    setTimeout(() => {
+      const freshTicket: MaintenanceTicket = {
+        id: `t${Date.now()}`,
+        propertyId: user.assignedPropertyId || 'p1',
+        tenantId: user.id,
+        issue: newIssue,
+        status: TicketStatus.OPEN,
+        priority: TicketPriority.MEDIUM,
+        createdAt: new Date().toISOString(),
+      };
 
-    const freshTicket: MaintenanceTicket = {
-      id: `t${Date.now()}`,
-      propertyId: user.assignedPropertyId || 'p1',
-      tenantId: user.id,
-      issue: newIssue,
-      status: TicketStatus.OPEN,
-      priority: analysis.priority as TicketPriority,
-      createdAt: new Date().toISOString(),
-      aiAssessment: analysis.assessment
-    };
-
-    // Notify Agent
-    const agentNotification = {
-      id: `n_t_${Date.now()}`,
-      userId: 'u1', // In real app, find property agent
-      title: 'New Maintenance Request',
-      message: `A new ticket has been submitted for property ${freshTicket.propertyId}. Priority: ${freshTicket.priority}.`,
-      type: NotificationType.INFO,
-      timestamp: new Date().toISOString(),
-      isRead: false,
-      linkTo: 'maintenance'
-    };
-
-    const newState = { 
-        ...store, 
-        tickets: [freshTicket, ...store.tickets],
-        notifications: [agentNotification, ...store.notifications]
-    };
-    saveStore(newState);
-    setStore(newState);
-    setTickets([freshTicket, ...tickets]);
-    setNewIssue('');
-    setIsSubmitting(false);
-    setIsAiProcessing(false);
+      const newState = { 
+          ...store, 
+          tickets: [freshTicket, ...store.tickets],
+          notifications: [{
+            id: `n_t_${Date.now()}`,
+            userId: 'u1', 
+            title: 'Maintenance Logged',
+            message: `A new repair request has been filed for Unit ${freshTicket.propertyId}.`,
+            type: NotificationType.INFO,
+            timestamp: new Date().toISOString(),
+            isRead: false,
+            linkTo: 'maintenance'
+          }, ...store.notifications]
+      };
+      saveStore(newState);
+      setStore(newState);
+      setTickets([freshTicket, ...tickets]);
+      setNewIssue('');
+      setIsSubmitting(false);
+    }, 1000);
   };
 
   const handleUpdateStatus = (ticketId: string, newStatus: TicketStatus) => {
-    const updatedTickets = store.tickets.map(t => 
-        t.id === ticketId ? { ...t, status: newStatus } : t
-    );
-    
+    const updatedTickets = store.tickets.map(t => t.id === ticketId ? { ...t, status: newStatus } : t);
     const ticket = store.tickets.find(t => t.id === ticketId);
     if (!ticket) return;
-
-    // Notify Tenant
-    const tenantNotification = {
-        id: `n_ts_${Date.now()}`,
-        userId: ticket.tenantId,
-        title: 'Maintenance Update',
-        message: `Your maintenance request #${ticket.id} is now ${newStatus.replace('_', ' ').toLowerCase()}.`,
-        type: newStatus === TicketStatus.RESOLVED ? NotificationType.SUCCESS : NotificationType.INFO,
-        timestamp: new Date().toISOString(),
-        isRead: false,
-        linkTo: 'maintenance'
-    };
 
     const newState = { 
         ...store, 
         tickets: updatedTickets,
-        notifications: [tenantNotification, ...store.notifications]
+        notifications: [{
+            id: `n_ts_${Date.now()}`,
+            userId: ticket.tenantId,
+            title: 'Ticket Status Updated',
+            message: `Request #${ticket.id} is now ${newStatus.replace('_', ' ')}.`,
+            type: NotificationType.INFO,
+            timestamp: new Date().toISOString(),
+            isRead: false
+        }, ...store.notifications]
     };
     saveStore(newState);
     setStore(newState);
     setTickets(user.role === UserRole.TENANT ? updatedTickets.filter(t => t.tenantId === user.id) : updatedTickets);
   };
 
-  const getPriorityColor = (priority: TicketPriority) => {
-    switch (priority) {
-      case TicketPriority.EMERGENCY: return 'text-red-600 bg-red-100';
-      case TicketPriority.HIGH: return 'text-orange-600 bg-orange-100';
-      case TicketPriority.MEDIUM: return 'text-amber-600 bg-amber-100';
-      default: return 'text-emerald-600 bg-emerald-100';
-    }
-  };
-
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-center">
+    <div className="space-y-8 animate-in fade-in duration-500 bg-black">
+      <header className="flex justify-between items-center px-1">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Maintenance Tickets</h1>
-          <p className="text-slate-500">Track and manage repair requests.</p>
+          <h1 className="text-3xl font-black text-white tracking-tight">Maintenance Tickets</h1>
+          <p className="text-zinc-500 font-medium">Official infrastructure repair tracking.</p>
         </div>
         {user.role === UserRole.TENANT && (
-          <button 
-            onClick={() => setIsSubmitting(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center shadow-lg transition-all transform active:scale-95"
-          >
-            <Plus className="w-4 h-4 mr-2" /> Submit Request
-          </button>
+          <button onClick={() => setIsSubmitting(true)} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center shadow-2xl shadow-blue-900/20 transform active:scale-95"><Plus size={18} className="mr-2" /> Log Issue</button>
         )}
-      </div>
+      </header>
 
       {isSubmitting && (
-        <div className="bg-white p-6 rounded-2xl border border-indigo-100 shadow-xl animate-in zoom-in-95 duration-300">
-          <h3 className="font-bold text-slate-800 mb-4">Report an Issue</h3>
-          <textarea 
-            className="w-full p-4 border rounded-xl h-32 outline-none focus:ring-2 focus:ring-indigo-500 mb-4 text-sm"
-            placeholder="Describe the problem in detail (e.g. 'Kitchen sink is leaking from the P-trap...')"
-            value={newIssue}
-            onChange={e => setNewIssue(e.target.value)}
-          />
-          <div className="flex space-x-3 items-center">
-            <button 
-              onClick={handleSubmit} 
-              disabled={isAiProcessing || !newIssue}
-              className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-semibold flex items-center disabled:opacity-50 transition-all"
-            >
-              {isAiProcessing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
-              {isAiProcessing ? 'AI Analyzing...' : 'Submit with AI Assist'}
+        <div className="bg-white p-10 rounded-[3rem] border border-white/20 shadow-2xl animate-in zoom-in-95">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-black text-2xl text-black">New Repair Request</h3>
+            <button onClick={() => setIsSubmitting(false)} className="text-zinc-400 hover:text-black">
+              <X size={24} />
             </button>
-            {!isAiProcessing && (
-              <button onClick={() => setIsSubmitting(false)} className="text-slate-400 font-bold text-sm px-4 hover:text-slate-600">Cancel</button>
-            )}
           </div>
-          {isAiProcessing && (
-            <div className="mt-4 p-3 bg-indigo-50 rounded-xl border border-indigo-100 flex items-center animate-pulse">
-                <Sparkles className="w-4 h-4 text-indigo-500 mr-2" />
-                <p className="text-xs text-indigo-500 font-medium">Gemini is evaluating priority and providing technical insights...</p>
-            </div>
-          )}
+          <textarea className="w-full p-8 border-2 border-zinc-100 rounded-[2rem] h-40 outline-none focus:ring-4 focus:ring-blue-600/10 mb-8 text-lg font-bold text-black bg-zinc-50 resize-none" placeholder="Please describe the fault clearly (e.g. leaking sink, electrical trip)..." value={newIssue} onChange={e => setNewIssue(e.target.value)} />
+          <div className="flex gap-4">
+            <button onClick={handleSubmit} disabled={!newIssue} className="flex-[2] bg-blue-600 text-white px-8 py-5 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-100 disabled:opacity-50">Submit Ticket</button>
+            <button onClick={() => setIsSubmitting(false)} className="flex-1 text-zinc-500 font-black uppercase tracking-widest text-xs px-4 bg-zinc-100 rounded-2xl hover:bg-zinc-200">Discard</button>
+          </div>
         </div>
       )}
 
       <div className="space-y-4">
-        {tickets.length > 0 ? tickets.map(ticket => (
-          <div key={ticket.id} className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:border-indigo-100 transition-all group">
-            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
-              <div className="flex-1">
-                <div className="flex items-center space-x-2 mb-2">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getPriorityColor(ticket.priority)}`}>
-                    {ticket.priority}
-                  </span>
-                  <span className="text-xs text-slate-400 font-medium font-mono">#{ticket.id}</span>
-                </div>
-                <h4 className="text-lg font-bold text-slate-800 mb-1 leading-tight">{ticket.issue}</h4>
-                <div className="flex items-center text-xs text-slate-500">
-                  <Clock className="w-3 h-3 mr-1" />
-                  {new Date(ticket.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                  <span className="mx-2">•</span>
-                  <span className="bg-slate-50 px-2 py-0.5 rounded border border-slate-100">Unit: {ticket.propertyId}</span>
-                </div>
-                
-                {ticket.aiAssessment && (
-                  <div className="mt-4 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50 text-sm">
-                    <div className="flex items-center text-indigo-700 font-bold mb-2 text-xs uppercase tracking-widest">
-                      <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                      AI Technical Assessment
-                    </div>
-                    <p className="text-indigo-600/80 leading-relaxed italic text-sm">{ticket.aiAssessment}</p>
-                  </div>
-                )}
+        {tickets.map(ticket => (
+          <div key={ticket.id} className="bg-zinc-900 p-8 rounded-[2.5rem] border border-zinc-800 shadow-xl flex flex-col md:flex-row justify-between items-center gap-8 group hover:border-blue-500/30 transition-all duration-500">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">Ticket #{ticket.id.substring(ticket.id.length-4)}</span>
+                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase ${ticket.priority === 'EMERGENCY' ? 'bg-rose-600 text-white' : 'bg-zinc-800 text-zinc-400'}`}>{ticket.priority}</span>
               </div>
-
-              <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-start gap-4">
-                <div className={`flex items-center px-4 py-2 rounded-full text-xs font-bold ${
-                    ticket.status === TicketStatus.OPEN ? 'bg-amber-100 text-amber-700' : 
-                    ticket.status === TicketStatus.IN_PROGRESS ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
-                }`}>
-                  {ticket.status === TicketStatus.OPEN ? <AlertCircle className="w-3.5 h-3.5 mr-2" /> : 
-                   ticket.status === TicketStatus.IN_PROGRESS ? <Clock className="w-3.5 h-3.5 mr-2" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-2" />}
-                  {ticket.status.replace('_', ' ')}
-                </div>
-                
-                {(user.role === UserRole.AGENT || user.role === UserRole.ADMIN) && (
-                  <div className="flex items-center gap-2">
-                     <select 
-                        className="text-xs bg-slate-50 border border-slate-200 rounded-lg px-2 py-2 outline-none focus:ring-2 focus:ring-indigo-500 font-bold text-slate-600"
-                        value={ticket.status}
-                        onChange={(e) => handleUpdateStatus(ticket.id, e.target.value as TicketStatus)}
-                     >
-                        <option value={TicketStatus.OPEN}>Mark Open</option>
-                        <option value={TicketStatus.IN_PROGRESS}>Mark In Progress</option>
-                        <option value={TicketStatus.RESOLVED}>Mark Resolved</option>
-                     </select>
-                  </div>
-                )}
+              <h4 className="text-2xl font-black text-white mb-2 leading-tight">{ticket.issue}</h4>
+              <div className="flex items-center gap-4 text-[10px] text-zinc-600 font-black uppercase tracking-widest">
+                <span>Logged {new Date(ticket.createdAt).toLocaleDateString()}</span>
+                <span className="w-1.5 h-1.5 bg-zinc-800 rounded-full"></span>
+                <span>Unit ID: {ticket.propertyId}</span>
               </div>
             </div>
+            <div className="flex items-center gap-6 w-full md:w-auto">
+               <span className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase flex-1 md:flex-none text-center ${ticket.status === 'RESOLVED' ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'}`}>{ticket.status.replace('_', ' ')}</span>
+               {(user.role === UserRole.AGENT || user.role === UserRole.ADMIN) && (
+                 <div className="relative flex-1 md:flex-none">
+                    <select className="appearance-none bg-zinc-800 border-zinc-700 text-white rounded-2xl px-6 py-3 pr-10 text-[10px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-blue-600" value={ticket.status} onChange={e => handleUpdateStatus(ticket.id, e.target.value as TicketStatus)}>
+                      <option value={TicketStatus.OPEN}>OPEN</option>
+                      <option value={TicketStatus.IN_PROGRESS}>IN PROGRESS</option>
+                      <option value={TicketStatus.RESOLVED}>RESOLVED</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500 pointer-events-none" />
+                 </div>
+               )}
+            </div>
           </div>
-        )) : (
-          <div className="text-center py-24 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-            <Wrench className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-slate-400">No active maintenance requests</h3>
-            <p className="text-slate-400 text-sm">Everything seems to be in perfect order.</p>
+        ))}
+        {tickets.length === 0 && (
+          <div className="text-center py-24 bg-zinc-950 rounded-[4rem] border-2 border-dashed border-zinc-800">
+            <Wrench className="w-16 h-16 text-zinc-800 mx-auto mb-6" />
+            <p className="text-zinc-600 font-black uppercase tracking-widest text-xs">No active maintenance records</p>
           </div>
         )}
       </div>

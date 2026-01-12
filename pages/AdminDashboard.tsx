@@ -4,17 +4,18 @@ import { User, UserRole } from '../types';
 import { getStore } from '../store';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line
+  PieChart, Pie, Cell
 } from 'recharts';
-import { Building, Users, AlertCircle, DollarSign, UserCheck, Activity } from 'lucide-react';
+import { Building, Users, AlertCircle, DollarSign, UserCheck, Activity, ArrowRight, ClipboardCheck } from 'lucide-react';
 
 interface AdminDashboardProps {
   user: User;
+  onNavigate: (view: string) => void;
 }
 
 const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444'];
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, onNavigate }) => {
   const store = getStore();
 
   const metrics = useMemo(() => {
@@ -38,9 +39,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <header>
-        <h1 className="text-2xl font-bold text-slate-800">Admin Command Center</h1>
-        <p className="text-slate-500">Global overview of all property operations and financial health.</p>
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Admin Command Center</h1>
+          <p className="text-slate-500">Global overview of all property operations and financial health.</p>
+        </div>
+        <button 
+          onClick={() => onNavigate('admin_applications')}
+          className="bg-slate-900 text-white px-6 py-3 rounded-2xl font-black flex items-center shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95"
+        >
+          <ClipboardCheck className="mr-2 w-5 h-5" /> View All Applications
+        </button>
       </header>
 
       {/* Metrics Grid */}
@@ -87,26 +96,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user }) => {
           </div>
         </div>
 
-        {/* Revenue vs Outstanding */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <h3 className="text-lg font-bold text-slate-800 mb-6">Rent Collection Health</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={[
-                { name: 'Collected', value: metrics.totalRevenue },
-                { name: 'Outstanding', value: metrics.outstandingRent }
-              ]}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip formatter={(value: number) => `$${value.toLocaleString()}`} />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                   <Cell fill="#10b981" />
-                   <Cell fill="#ef4444" />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        {/* Action Card */}
+        <div className="bg-indigo-600 p-8 rounded-[2rem] text-white flex flex-col justify-between shadow-2xl shadow-indigo-200">
+           <div>
+              <h3 className="text-2xl font-black mb-2">Tenant Vetting Engine</h3>
+              <p className="text-indigo-100 font-medium leading-relaxed">
+                Review complete digital applications including AI risk scoring, identity verification, and financial analysis. 
+                Approve or reject candidates with a single click.
+              </p>
+           </div>
+           <button 
+             onClick={() => onNavigate('admin_applications')}
+             className="mt-8 bg-white text-indigo-600 px-6 py-4 rounded-2xl font-black flex items-center justify-center hover:bg-indigo-50 transition-all shadow-xl"
+           >
+             Manage Applications <ArrowRight className="ml-2 w-5 h-5" />
+           </button>
         </div>
       </div>
 

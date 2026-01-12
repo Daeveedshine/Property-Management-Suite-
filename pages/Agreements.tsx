@@ -2,8 +2,7 @@
 import React, { useState } from 'react';
 import { User, UserRole, Agreement } from '../types';
 import { getStore, saveStore } from '../store';
-import { summarizeAgreement } from '../services/geminiService';
-import { FileText, Upload, ExternalLink, Sparkles, Loader2, CheckCircle, Clock } from 'lucide-react';
+import { FileText, Upload, ExternalLink, Loader2, CheckCircle, Clock } from 'lucide-react';
 
 interface AgreementsProps {
   user: User;
@@ -17,17 +16,7 @@ const Agreements: React.FC<AgreementsProps> = ({ user }) => {
       : store.agreements.filter(a => a.tenantId === user.id)
   );
   
-  const [isSummarizing, setIsSummarizing] = useState<string | null>(null);
-  const [summary, setSummary] = useState<Record<string, string>>({});
   const [uploadingId, setUploadingId] = useState<string | null>(null);
-
-  const handleSummarize = async (agreement: Agreement) => {
-    setIsSummarizing(agreement.id);
-    const mockContent = `Lease for Property ${agreement.propertyId}. Start: ${agreement.startDate}, End: ${agreement.endDate}. Monthly Rent: $2500. Security Deposit: $5000. No pets allowed. Tenant responsible for utilities.`;
-    const result = await summarizeAgreement(mockContent);
-    setSummary(prev => ({ ...prev, [agreement.id]: result }));
-    setIsSummarizing(null);
-  };
 
   const simulateUpload = (id: string) => {
     setUploadingId(id);
@@ -66,26 +55,6 @@ const Agreements: React.FC<AgreementsProps> = ({ user }) => {
                   </div>
                 </div>
               </div>
-
-              {summary[agreement.id] ? (
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 animate-in zoom-in-95 duration-300">
-                  <div className="flex items-center text-indigo-600 font-bold text-xs uppercase tracking-widest mb-2">
-                    <Sparkles className="w-3.5 h-3.5 mr-1.5" /> AI Key Terms Summary
-                  </div>
-                  <div className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
-                    {summary[agreement.id]}
-                  </div>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => handleSummarize(agreement)}
-                  disabled={isSummarizing === agreement.id}
-                  className="mb-4 text-xs font-bold text-indigo-600 flex items-center hover:text-indigo-800 disabled:opacity-50"
-                >
-                  {isSummarizing === agreement.id ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1.5" />}
-                  {isSummarizing === agreement.id ? 'Analyzing with Gemini...' : 'AI Summary of terms'}
-                </button>
-              )}
             </div>
 
             <div className="bg-slate-50/50 p-6 border-t md:border-t-0 md:border-l border-slate-100 flex flex-col justify-center items-center space-y-3 min-w-[200px]">

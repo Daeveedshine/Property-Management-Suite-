@@ -33,6 +33,14 @@ export enum NotificationType {
   SUCCESS = 'SUCCESS'
 }
 
+export enum ApplicationStatus {
+  PENDING = 'PENDING',
+  REVIEWING = 'REVIEWING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  MORE_INFO_REQUIRED = 'MORE_INFO_REQUIRED'
+}
+
 export interface User {
   id: string;
   name: string;
@@ -51,6 +59,66 @@ export interface Property {
   agentId: string;
   tenantId?: string;
   description?: string;
+}
+
+export interface TenantApplication {
+  id: string;
+  userId: string;
+  propertyId: string;
+  agentId: string; // Routing applications to the specific agent
+  status: ApplicationStatus;
+  submissionDate: string;
+  personalInfo: {
+    fullName: string;
+    gender: string;
+    dob: string;
+    maritalStatus: string;
+    dependents: number;
+    nationality: string;
+    stateOfOrigin: string;
+    permanentAddress: string;
+    currentAddress: string;
+    phone: string;
+  };
+  identity: {
+    idType: string;
+    idNumber: string;
+    nin: string;
+    idUrlFront: string;
+    idUrlBack: string;
+    selfieUrl: string;
+  };
+  employment: {
+    status: string;
+    employer: string;
+    officeAddress: string;
+    workPhone: string;
+    jobTitle: string;
+    monthlyIncome: number;
+    incomeProofUrl: string;
+  };
+  rentalHistory: {
+    previousLandlord: string;
+    landlordPhone: string;
+    duration: string;
+    monthlyRent: number;
+    reasonForLeaving: string;
+    paidOnTime: boolean;
+  };
+  emergency: {
+    name: string;
+    phone: string;
+    relationship: string;
+  };
+  guarantor: {
+    name: string;
+    phone: string;
+    occupation: string;
+    address: string;
+    idUrl: string;
+  };
+  riskScore: number;
+  aiRecommendation: string;
 }
 
 export interface Agreement {
@@ -92,5 +160,5 @@ export interface Notification {
   type: NotificationType;
   timestamp: string;
   isRead: boolean;
-  linkTo?: string; // Optional view to navigate to
+  linkTo?: string;
 }

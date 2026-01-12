@@ -1,5 +1,5 @@
 
-import { User, Property, Agreement, Payment, MaintenanceTicket, Notification, UserRole, PropertyStatus, TicketStatus, TicketPriority, NotificationType } from './types';
+import { User, Property, Agreement, Payment, MaintenanceTicket, Notification, UserRole, PropertyStatus, TicketStatus, TicketPriority, NotificationType, TenantApplication, ApplicationStatus } from './types';
 
 const STORAGE_KEY = 'prop_lifecycle_data';
 
@@ -10,6 +10,7 @@ interface AppState {
   payments: Payment[];
   tickets: MaintenanceTicket[];
   notifications: Notification[];
+  applications: TenantApplication[];
   currentUser: User | null;
 }
 
@@ -17,7 +18,7 @@ const initialData: AppState = {
   users: [
     { id: 'u1', name: 'Alex Agent', email: 'agent@example.com', role: UserRole.AGENT, phone: '+1 (555) 999-0001' },
     { id: 'u2', name: 'Terry Tenant', email: 'tenant@example.com', role: UserRole.TENANT, assignedPropertyId: 'p1', phone: '+1 (555) 123-4567' },
-    { id: 'u3', name: 'Bob Buyer', email: 'buyer@example.com', role: UserRole.TENANT, phone: '+1 (555) 444-5555' },
+    { id: 'u3', name: 'Bob Applicant', email: 'bob@example.com', role: UserRole.TENANT, phone: '+1 (555) 444-5555' },
     { id: 'u4', name: 'Sarah Admin', email: 'admin@example.com', role: UserRole.ADMIN, phone: '+1 (555) 000-0000' },
   ],
   properties: [
@@ -30,33 +31,64 @@ const initialData: AppState = {
   ],
   payments: [
     { id: 'pay1', propertyId: 'p1', tenantId: 'u2', amount: 2500, date: '2023-11-01', status: 'paid' },
-    { id: 'pay2', propertyId: 'p1', tenantId: 'u2', amount: 2500, date: '2023-12-01', status: 'pending' },
-    { id: 'pay3', propertyId: 'p1', tenantId: 'u2', amount: 2500, date: '2024-01-01', status: 'pending' },
   ],
   tickets: [
     { id: 't1', propertyId: 'p1', tenantId: 'u2', issue: 'Leaking faucet in kitchen', status: TicketStatus.OPEN, priority: TicketPriority.MEDIUM, createdAt: new Date().toISOString() },
   ],
-  notifications: [
-    { 
-      id: 'n1', 
-      userId: 'u1', 
-      title: 'Rent Overdue', 
-      message: 'Terry Tenant is 5 days late on rent for Sunset Apartments #402.', 
-      type: NotificationType.WARNING, 
-      timestamp: new Date().toISOString(), 
-      isRead: false,
-      linkTo: 'payments'
-    },
-    { 
-      id: 'n2', 
-      userId: 'u2', 
-      title: 'Rent Reminder', 
-      message: 'Your rent of $2,500 is due in 3 days.', 
-      type: NotificationType.INFO, 
-      timestamp: new Date().toISOString(), 
-      isRead: false,
-      linkTo: 'payments'
-    },
+  notifications: [],
+  applications: [
+    {
+      id: 'app1',
+      userId: 'u3',
+      propertyId: 'p2',
+      agentId: 'u1', // Initial application correctly routed to Alex Agent
+      status: ApplicationStatus.PENDING,
+      submissionDate: new Date().toISOString(),
+      personalInfo: {
+        fullName: 'Bob Applicant',
+        gender: 'Male',
+        dob: '1990-05-15',
+        maritalStatus: 'Single',
+        dependents: 0,
+        nationality: 'American',
+        stateOfOrigin: 'California',
+        permanentAddress: '789 Birch St, Miami',
+        currentAddress: '789 Birch St, Miami',
+        phone: '+1 (555) 444-5555'
+      },
+      identity: { idType: 'NIN', idNumber: '12345678901', nin: '12345678901', idUrlFront: '', idUrlBack: '', selfieUrl: '' },
+      employment: { 
+        status: 'Employed', 
+        employer: 'Tech Corp', 
+        officeAddress: '100 Silicon Way, San Jose',
+        workPhone: '+1 (555) 999-8888',
+        jobTitle: 'Senior Engineer',
+        monthlyIncome: 8500,
+        incomeProofUrl: ''
+      },
+      rentalHistory: { 
+        previousLandlord: 'John Smith', 
+        landlordPhone: '+1 555-222-3333',
+        duration: '2 years',
+        monthlyRent: 2000,
+        reasonForLeaving: 'Relocation',
+        paidOnTime: true
+      },
+      emergency: {
+        name: 'Jane Doe',
+        phone: '+1 (555) 777-8888',
+        relationship: 'Sister'
+      },
+      guarantor: { 
+        name: 'Alice Mom', 
+        phone: '+1 555-000-1111',
+        occupation: 'Retired',
+        address: '456 Oak Ave, Seattle',
+        idUrl: ''
+      },
+      riskScore: 85,
+      aiRecommendation: 'High income relative to rent. Strong employment record. Recommend approval.'
+    }
   ],
   currentUser: null,
 };
