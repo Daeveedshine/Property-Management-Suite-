@@ -12,6 +12,19 @@ export enum PropertyStatus {
   ARCHIVED = 'ARCHIVED'
 }
 
+export enum PropertyCategory {
+  RESIDENTIAL = 'Residential',
+  COMMERCIAL = 'Commercial'
+}
+
+export type PropertyType = 
+  | 'Single Room' | 'Self-contained' | 'Mini Flat (1 Bedroom)' 
+  | '2 Bedroom flat' | '3 Bedroom Flat' | '4 Bedroom Flat' 
+  | 'Terrace' | 'Semi-detached Duplex' | 'Fully Detached Duplex' 
+  | 'Penthouse' | 'Studio Appartment' | 'Serviced Appartment' 
+  | 'Shop' | 'Plaza Shop' | 'Office Space' | 'Co-working Space' 
+  | 'Factory' | 'Warehouse' | 'land';
+
 export enum TicketStatus {
   OPEN = 'OPEN',
   IN_PROGRESS = 'IN_PROGRESS',
@@ -58,6 +71,8 @@ export interface Property {
   agentId: string;
   tenantId?: string;
   description?: string;
+  category: PropertyCategory;
+  type: PropertyType;
 }
 
 export interface TenantApplication {

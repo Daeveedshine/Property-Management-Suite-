@@ -53,13 +53,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   }, []);
 
   return (
-    <div className="space-y-10 animate-in fade-in duration-500">
+    <div className="space-y-10 animate-in fade-in duration-500 pb-12">
       <header>
         <h1 className="text-4xl font-black text-zinc-900 dark:text-white tracking-tighter">Overview</h1>
         <p className="text-zinc-400 font-medium tracking-tight">Monitoring {user.name}'s space assets.</p>
       </header>
 
-      {/* Top Stats - Pure White Surfaces (90% Paper Logic) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {user.role === UserRole.AGENT ? (
           <>
@@ -79,15 +78,14 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* Chart Card - 90/10 Ratio with blue bars */}
         <div className="lg:col-span-2 bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] shadow-sm border border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-900 dark:text-white">Revenue Lifecycle</h3>
             <div className="bg-offwhite dark:bg-black px-4 py-2 rounded-xl text-[10px] font-black uppercase text-zinc-400">Monthly Yield</div>
           </div>
-          <div className="h-72">
+          <div className="h-72 w-full min-w-0" style={{ minHeight: '300px' }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={paymentData}>
+              <BarChart data={paymentData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#222" : "#F3F4F6"} />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: isDark ? '#444' : '#9CA3AF', fontSize: 10, fontWeight: 'bold'}} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: isDark ? '#444' : '#9CA3AF', fontSize: 10, fontWeight: 'bold'}} />
@@ -102,7 +100,6 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
           </div>
         </div>
 
-        {/* Notifications Card - 90/10 Logic: Clean list with blue accents */}
         <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] shadow-sm border border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-900 dark:text-white">Alert Registry</h3>
