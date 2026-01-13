@@ -1,4 +1,3 @@
-
 import { User, Property, Agreement, Payment, MaintenanceTicket, Notification, UserRole, PropertyStatus, TicketStatus, TicketPriority, NotificationType, TenantApplication, ApplicationStatus } from './types';
 
 const STORAGE_KEY = 'prop_lifecycle_data';
@@ -16,21 +15,21 @@ interface AppState {
 
 const initialData: AppState = {
   users: [
-    { id: 'u1', name: 'Alex Agent', email: 'agent@example.com', role: UserRole.AGENT, phone: '+1 (555) 999-0001' },
-    { id: 'u2', name: 'Terry Tenant', email: 'tenant@example.com', role: UserRole.TENANT, assignedPropertyId: 'p1', phone: '+1 (555) 123-4567' },
-    { id: 'u3', name: 'Bob Applicant', email: 'bob@example.com', role: UserRole.TENANT, phone: '+1 (555) 444-5555' },
-    { id: 'u4', name: 'Sarah Admin', email: 'admin@example.com', role: UserRole.ADMIN, phone: '+1 (555) 000-0000' },
+    { id: 'u1', name: 'Alex Agent', email: 'agent@example.com', role: UserRole.AGENT, phone: '+234 801 234 5678' },
+    { id: 'u2', name: 'Terry Tenant', email: 'tenant@example.com', role: UserRole.TENANT, assignedPropertyId: 'p1', phone: '+234 802 345 6789' },
+    { id: 'u3', name: 'Bob Applicant', email: 'bob@example.com', role: UserRole.TENANT, phone: '+234 803 456 7890' },
+    { id: 'u4', name: 'Sarah Admin', email: 'admin@example.com', role: UserRole.ADMIN, phone: '+234 804 567 8901' },
   ],
   properties: [
-    { id: 'p1', name: 'Sunset Apartments #402', location: '123 Sky Ln, Miami', rent: 2500, status: PropertyStatus.OCCUPIED, agentId: 'u1', tenantId: 'u2' },
-    { id: 'p2', name: 'Downtown Loft', location: '55 Main St, Chicago', rent: 3200, status: PropertyStatus.VACANT, agentId: 'u1' },
-    { id: 'p3', name: 'Oak Ridge Villa', location: '88 Forest Rd, Seattle', rent: 4500, status: PropertyStatus.LISTED, agentId: 'u1' },
+    { id: 'p1', name: 'Sunset Apartments #402', location: 'Victoria Island, Lagos', rent: 2500000, status: PropertyStatus.OCCUPIED, agentId: 'u1', tenantId: 'u2' },
+    { id: 'p2', name: 'Downtown Loft', location: 'Maitama, Abuja', rent: 3200000, status: PropertyStatus.VACANT, agentId: 'u1' },
+    { id: 'p3', name: 'Oak Ridge Villa', location: 'Lekki Phase 1, Lagos', rent: 4500000, status: PropertyStatus.LISTED, agentId: 'u1' },
   ],
   agreements: [
     { id: 'a1', propertyId: 'p1', tenantId: 'u2', version: 1, startDate: '2023-01-01', endDate: '2024-12-31', status: 'active', documentUrl: 'https://example.com/lease_v1.pdf' },
   ],
   payments: [
-    { id: 'pay1', propertyId: 'p1', tenantId: 'u2', amount: 2500, date: '2023-11-01', status: 'paid' },
+    { id: 'pay1', propertyId: 'p1', tenantId: 'u2', amount: 2500000, date: '2023-11-01', status: 'paid' },
   ],
   tickets: [
     { id: 't1', propertyId: 'p1', tenantId: 'u2', issue: 'Leaking faucet in kitchen', status: TicketStatus.OPEN, priority: TicketPriority.MEDIUM, createdAt: new Date().toISOString() },
@@ -40,54 +39,31 @@ const initialData: AppState = {
     {
       id: 'app1',
       userId: 'u3',
-      propertyId: 'p2',
-      agentId: 'u1', // Initial application correctly routed to Alex Agent
+      propertyId: 'PENDING',
+      agentId: 'u1', 
       status: ApplicationStatus.PENDING,
       submissionDate: new Date().toISOString(),
-      personalInfo: {
-        fullName: 'Bob Applicant',
-        gender: 'Male',
-        dob: '1990-05-15',
-        maritalStatus: 'Single',
-        dependents: 0,
-        nationality: 'American',
-        stateOfOrigin: 'California',
-        permanentAddress: '789 Birch St, Miami',
-        currentAddress: '789 Birch St, Miami',
-        phone: '+1 (555) 444-5555'
-      },
-      identity: { idType: 'NIN', idNumber: '12345678901', nin: '12345678901', idUrlFront: '', idUrlBack: '', selfieUrl: '' },
-      employment: { 
-        status: 'Employed', 
-        employer: 'Tech Corp', 
-        officeAddress: '100 Silicon Way, San Jose',
-        workPhone: '+1 (555) 999-8888',
-        jobTitle: 'Senior Engineer',
-        monthlyIncome: 8500,
-        incomeProofUrl: ''
-      },
-      rentalHistory: { 
-        previousLandlord: 'John Smith', 
-        landlordPhone: '+1 555-222-3333',
-        duration: '2 years',
-        monthlyRent: 2000,
-        reasonForLeaving: 'Relocation',
-        paidOnTime: true
-      },
-      emergency: {
-        name: 'Jane Doe',
-        phone: '+1 (555) 777-8888',
-        relationship: 'Sister'
-      },
-      guarantor: { 
-        name: 'Alice Mom', 
-        phone: '+1 555-000-1111',
-        occupation: 'Retired',
-        address: '456 Oak Ave, Seattle',
-        idUrl: ''
-      },
+      firstName: 'Bob',
+      surname: 'Applicant',
+      middleName: 'Olu',
+      maritalStatus: 'Single',
+      gender: 'Male',
+      currentHomeAddress: '789 Birch St, Ikeja',
+      occupation: 'Senior Engineer',
+      familySize: 2,
+      phoneNumber: '+234 803 456 7890',
+      reasonForRelocating: 'Relocation for work',
+      currentLandlordName: 'John Smith',
+      currentLandlordPhone: '+234 805 111 2222',
+      verificationType: 'NIN',
+      verificationIdNumber: '23456789012',
+      verificationUrl: 'https://images.unsplash.com/photo-1557064820-1c913d98fb73?auto=format&fit=crop&q=80&w=400',
+      passportPhotoUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=400',
+      agentIdCode: 'u1',
+      signature: 'Bob Applicant',
+      applicationDate: new Date().toISOString().split('T')[0],
       riskScore: 85,
-      aiRecommendation: 'High income relative to rent. Strong employment record. Recommend approval.'
+      aiRecommendation: 'Stable income and good rental history. Recommend approval.'
     }
   ],
   currentUser: null,

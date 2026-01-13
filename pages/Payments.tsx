@@ -59,11 +59,11 @@ const Payments: React.FC<PaymentsProps> = ({ user }) => {
         <div className="flex gap-4">
           <div className="bg-indigo-600 text-white p-4 rounded-2xl shadow-lg min-w-[150px]">
             <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">Total Collected</p>
-            <p className="text-2xl font-bold">${stats.total.toLocaleString()}</p>
+            <p className="text-2xl font-bold">₦{stats.total.toLocaleString()}</p>
           </div>
           <div className="bg-rose-500 text-white p-4 rounded-2xl shadow-lg min-w-[150px]">
             <p className="text-[10px] font-bold uppercase tracking-widest opacity-80">Outstanding</p>
-            <p className="text-2xl font-bold">${stats.outstanding.toLocaleString()}</p>
+            <p className="text-2xl font-bold">₦{stats.outstanding.toLocaleString()}</p>
           </div>
         </div>
       </header>
@@ -118,7 +118,7 @@ const Payments: React.FC<PaymentsProps> = ({ user }) => {
                 <div className="space-y-6">
                   <div className="flex justify-between items-center pb-4 border-b border-slate-100">
                     <span className="text-slate-600">Total Due</span>
-                    <span className="text-2xl font-bold text-slate-800">${payments.find(p => p.id === payingId)?.amount.toLocaleString()}</span>
+                    <span className="text-2xl font-bold text-slate-800">₦{payments.find(p => p.id === payingId)?.amount.toLocaleString()}</span>
                   </div>
 
                   <div className="space-y-3">
@@ -137,7 +137,7 @@ const Payments: React.FC<PaymentsProps> = ({ user }) => {
                     disabled={isProcessing}
                     className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-lg transition-all transform active:scale-95 disabled:opacity-50 flex items-center justify-center"
                   >
-                    {isProcessing ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <DollarSign className="w-5 h-5 mr-2" />}
+                    {isProcessing ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <span className="mr-2 font-bold text-lg">₦</span>}
                     {isProcessing ? 'Processing Transaction...' : 'Confirm & Pay Now'}
                   </button>
                   <p className="text-[10px] text-center text-slate-400">Encrypted by PropLifecycle SecurePay</p>
@@ -175,7 +175,7 @@ const Payments: React.FC<PaymentsProps> = ({ user }) => {
                         <Receipt className="w-4 h-4 text-slate-500" />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-slate-800">Monthly Rent</p>
+                        <p className="text-sm font-bold text-slate-800">Lease Payment</p>
                         <p className="text-[10px] text-slate-400 font-mono">{payment.id}</p>
                       </div>
                     </div>
@@ -192,7 +192,7 @@ const Payments: React.FC<PaymentsProps> = ({ user }) => {
                     </span>
                   </td>
                   <td className="px-6 py-4 font-bold text-slate-800">
-                    ${payment.amount.toLocaleString()}
+                    ₦{payment.amount.toLocaleString()}
                   </td>
                   <td className="px-6 py-4 text-right">
                     {payment.status === 'pending' && user.role === UserRole.TENANT ? (

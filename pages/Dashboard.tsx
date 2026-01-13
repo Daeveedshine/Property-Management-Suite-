@@ -17,7 +17,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
       return {
         totalProperties: store.properties.filter(p => p.agentId === user.id).length,
         occupiedProperties: store.properties.filter(p => p.agentId === user.id && p.status === PropertyStatus.OCCUPIED).length,
-        pendingTickets: store.tickets.filter(t => t.status === TicketStatus.OPEN).length, // Global for simplicity or can filter by property.agentId
+        pendingTickets: store.tickets.filter(t => t.status === TicketStatus.OPEN).length, 
         monthlyRevenue: store.payments.filter(p => p.status === 'paid').reduce((acc, curr) => acc + curr.amount, 0),
         pendingApps: store.applications.filter(a => a.agentId === user.id && a.status === ApplicationStatus.PENDING).length
       };
@@ -43,12 +43,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   const paymentData = useMemo(() => {
     return [
-      { name: 'Jan', amount: 4000 },
-      { name: 'Feb', amount: 3000 },
-      { name: 'Mar', amount: 2000 },
-      { name: 'Apr', amount: 2780 },
-      { name: 'May', amount: 1890 },
-      { name: 'Jun', amount: 2390 },
+      { name: 'Jan', amount: 4000000 },
+      { name: 'Feb', amount: 3000000 },
+      { name: 'Mar', amount: 2000000 },
+      { name: 'Apr', amount: 2780000 },
+      { name: 'May', amount: 1890000 },
+      { name: 'Jun', amount: 2390000 },
     ];
   }, []);
 
@@ -66,7 +66,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             <StatCard label="My Portfolio" value={stats.totalProperties} icon={Building} color="blue" />
             <StatCard label="Pending Applications" value={stats.pendingApps} icon={UserPlus} color="emerald" />
             <StatCard label="Open Maintenance" value={stats.pendingTickets} icon={AlertTriangle} color="amber" />
-            <StatCard label="Total Yield" value={`$${stats.monthlyRevenue.toLocaleString()}`} icon={TrendingUp} color="blue" />
+            <StatCard label="Total Annual Revenue" value={`₦${stats.monthlyRevenue.toLocaleString()}`} icon={TrendingUp} color="blue" />
           </>
         ) : (
           <>
@@ -82,7 +82,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         {/* Chart */}
         <div className="lg:col-span-2 bg-zinc-900 p-6 rounded-[2rem] shadow-2xl border border-zinc-800">
           <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-bold text-white">Financial Performance</h3>
+            <h3 className="text-lg font-bold text-white">Financial Performance (₦)</h3>
             <select className="text-sm bg-black border border-zinc-800 rounded-xl px-3 py-1 outline-none text-zinc-400">
               <option>Last 6 months</option>
               <option>Last year</option>

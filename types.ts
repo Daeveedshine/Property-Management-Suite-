@@ -1,4 +1,3 @@
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   AGENT = 'AGENT',
@@ -65,58 +64,30 @@ export interface TenantApplication {
   id: string;
   userId: string;
   propertyId: string;
-  agentId: string; // Routing applications to the specific agent
+  agentId: string;
   status: ApplicationStatus;
   submissionDate: string;
-  personalInfo: {
-    fullName: string;
-    gender: string;
-    dob: string;
-    maritalStatus: string;
-    dependents: number;
-    nationality: string;
-    stateOfOrigin: string;
-    permanentAddress: string;
-    currentAddress: string;
-    phone: string;
-  };
-  identity: {
-    idType: string;
-    idNumber: string;
-    nin: string;
-    idUrlFront: string;
-    idUrlBack: string;
-    selfieUrl: string;
-  };
-  employment: {
-    status: string;
-    employer: string;
-    officeAddress: string;
-    workPhone: string;
-    jobTitle: string;
-    monthlyIncome: number;
-    incomeProofUrl: string;
-  };
-  rentalHistory: {
-    previousLandlord: string;
-    landlordPhone: string;
-    duration: string;
-    monthlyRent: number;
-    reasonForLeaving: string;
-    paidOnTime: boolean;
-  };
-  emergency: {
-    name: string;
-    phone: string;
-    relationship: string;
-  };
-  guarantor: {
-    name: string;
-    phone: string;
-    occupation: string;
-    address: string;
-    idUrl: string;
-  };
+  
+  firstName: string;
+  surname: string;
+  middleName: string;
+  maritalStatus: 'Single' | 'Married' | 'Widower' | 'Widow';
+  gender: 'Male' | 'Female';
+  currentHomeAddress: string;
+  occupation: string;
+  familySize: number;
+  phoneNumber: string;
+  reasonForRelocating: string;
+  currentLandlordName: string;
+  currentLandlordPhone: string;
+  verificationType: 'NIN' | 'Passport' | "Voter's Card" | "Driver's License";
+  verificationIdNumber: string;
+  verificationUrl?: string;
+  passportPhotoUrl?: string;
+  agentIdCode: string;
+  signature: string;
+  applicationDate: string;
+  
   riskScore: number;
   aiRecommendation: string;
 }

@@ -214,12 +214,12 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
             </div>
             <div className="space-y-6">
               <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mb-2 ml-1">Rent Yield ($)</label>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mb-2 ml-1">Annual Rent (₦)</label>
                 <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 font-bold">₦</span>
                   <input 
                     type="number" 
-                    placeholder="2500" 
+                    placeholder="2500000" 
                     className="w-full pl-11 pr-5 py-4 bg-zinc-50 border border-zinc-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-bold text-black"
                     value={newProp.rent || ''}
                     onChange={e => setNewProp({...newProp, rent: parseInt(e.target.value)})}
@@ -270,8 +270,8 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
               
               <div className="flex items-center justify-between pt-6 border-t border-zinc-800">
                 <div className="flex flex-col">
-                  <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">Yield</span>
-                  <span className="text-3xl font-black text-white">${property.rent.toLocaleString()}</span>
+                  <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest mb-1">Annual Rent</span>
+                  <span className="text-3xl font-black text-white">₦{property.rent.toLocaleString()}</span>
                 </div>
                 <button 
                   onClick={() => { setSelectedProperty(property); setIsEditing(false); setAssignmentSuccess(false); }}
@@ -329,8 +329,8 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
                   <div className="bg-zinc-50 p-8 rounded-[2.5rem] border border-zinc-100">
-                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Monthly Yield</p>
-                    <p className="text-4xl font-black text-black">${selectedProperty.rent.toLocaleString()}</p>
+                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Annual Rent</p>
+                    <p className="text-4xl font-black text-black">₦{selectedProperty.rent.toLocaleString()}</p>
                   </div>
 
                   <div className="bg-zinc-50 p-8 rounded-[2.5rem] border border-zinc-100">
