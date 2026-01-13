@@ -11,6 +11,7 @@ interface AppState {
   notifications: Notification[];
   applications: TenantApplication[];
   currentUser: User | null;
+  theme: 'light' | 'dark';
 }
 
 const initialData: AppState = {
@@ -46,6 +47,8 @@ const initialData: AppState = {
       firstName: 'Bob',
       surname: 'Applicant',
       middleName: 'Olu',
+      // Added missing dob field to fix type error
+      dob: '1990-05-15',
       maritalStatus: 'Single',
       gender: 'Male',
       currentHomeAddress: '789 Birch St, Ikeja',
@@ -67,6 +70,7 @@ const initialData: AppState = {
     }
   ],
   currentUser: null,
+  theme: 'dark',
 };
 
 export const getStore = (): AppState => {

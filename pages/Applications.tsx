@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useRef } from 'react';
-import { User, TenantApplication, ApplicationStatus, NotificationType } from '../types';
+import { User, TenantApplication, ApplicationStatus, NotificationType, UserRole } from '../types';
 import { getStore, saveStore } from '../store';
 import { 
   CheckCircle, ArrowRight, ArrowLeft, Building, ShieldCheck, 
   Loader2, MapPin, UserCheck, 
   Search, Camera, Fingerprint, 
   Briefcase, Users, Phone, PenTool, Calendar, History, FileText, Eye,
-  UserPlus, Download, Trash2, Edit3, Image as ImageIcon, AlertCircle
+  UserPlus, Download, Trash2, Edit3, Image as ImageIcon, AlertCircle, ChevronDown, User as UserIcon, Printer, X, Maximize2
 } from 'lucide-react';
 
 interface ApplicationsProps {
@@ -22,13 +22,16 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
   const [activeTab, setActiveTab] = useState<'new' | 'history'>('new');
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [viewingApp, setViewingApp] = useState<TenantApplication | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [printApp, setPrintApp] = useState<TenantApplication | null>(null);
+  const [viewingApp, setViewingApp] = useState<TenantApplication | null>(null);
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<Partial<TenantApplication>>({
+  const initialFormData: Partial<TenantApplication> = {
     firstName: '',
     surname: '',
     middleName: '',
+    dob: '',
     maritalStatus: 'Single',
     gender: 'Male',
     currentHomeAddress: '',
@@ -45,7 +48,9 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
     agentIdCode: '',
     signature: '',
     applicationDate: new Date().toISOString().split('T')[0]
-  });
+  };
+
+  const [formData, setFormData] = useState<Partial<TenantApplication>>(initialFormData);
 
   const myApplications = useMemo(() => {
     return store.applications
@@ -55,13 +60,16 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
 
   const targetAgent = useMemo(() => {
     if (!formData.agentIdCode) return null;
-    return store.users.find(u => u.id.toLowerCase() === formData.agentIdCode?.toLowerCase());
+    return store.users.find(u => 
+      u.role === UserRole.AGENT && 
+      (u.id.toLowerCase() === formData.agentIdCode?.toLowerCase() || 
+       u.name.toLowerCase().includes(formData.agentIdCode?.toLowerCase() || ''))
+    );
   }, [store.users, formData.agentIdCode]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'verificationUrl' | 'passportPhotoUrl') => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onloadend = () => {
       setFormData(prev => ({ ...prev, [field]: reader.result as string }));
@@ -70,522 +78,616 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
   };
 
   const handleEdit = (app: TenantApplication) => {
-    setEditingId(app.id);
     setFormData({ ...app });
+    setEditingId(app.id);
     setStep(1);
     setActiveTab('new');
+    setViewingApp(null);
   };
 
   const handleSubmit = async () => {
-    if (!targetAgent) return;
     setIsSubmitting(true);
     
-    // Simulate scoring
-    const score = 70 + Math.floor(Math.random() * 25);
-    const recommendation = score > 80 
-      ? "Verified candidate with clean profile. High stability rating." 
-      : "Standard profile. Verification thresholds passed.";
+    const score = editingId ? (formData.riskScore || 70) : (60 + Math.floor(Math.random() * 35));
+    const recommendation = editingId ? (formData.aiRecommendation || "Updated Dossier") : (score > 80 
+      ? "AI Analysis: High stability profile detected. Verified identity and stable occupation history. Recommended for lifecycle enrollment."
+      : "AI Analysis: Standard profile. Manual verification of landlord reference recommended.");
 
     setTimeout(() => {
       let updatedApplications;
+      const finalAgentId = targetAgent?.id || 'u1';
+
+      const applicationRecord: TenantApplication = {
+        id: editingId || `app${Date.now()}`,
+        userId: user.id,
+        propertyId: 'PENDING',
+        agentId: finalAgentId, 
+        status: ApplicationStatus.PENDING,
+        submissionDate: new Date().toISOString(),
+        ...formData,
+        riskScore: score,
+        aiRecommendation: recommendation
+      } as TenantApplication;
+
       if (editingId) {
         updatedApplications = store.applications.map(app => 
-          app.id === editingId 
-            ? { ...app, ...formData, riskScore: score, aiRecommendation: recommendation, submissionDate: new Date().toISOString() } as TenantApplication
-            : app
+          app.id === editingId ? applicationRecord : app
         );
       } else {
-        const newApp: TenantApplication = {
-          id: `app${Date.now()}`,
-          userId: user.id,
-          propertyId: 'PENDING',
-          agentId: targetAgent.id, 
-          status: ApplicationStatus.PENDING,
-          submissionDate: new Date().toISOString(),
-          ...formData,
-          riskScore: score,
-          aiRecommendation: recommendation
-        } as TenantApplication;
-        updatedApplications = [...store.applications, newApp];
+        updatedApplications = [...store.applications, applicationRecord];
       }
-
-      const agentNotification = {
-        id: `n_app_${Date.now()}`,
-        userId: targetAgent.id,
-        title: editingId ? 'Application Updated' : 'New Enrollment Form',
-        message: `${formData.firstName} ${formData.surname} has ${editingId ? 'modified their' : 'submitted a new'} dossier.`,
-        type: NotificationType.INFO,
-        timestamp: new Date().toISOString(),
-        isRead: false,
-        linkTo: 'screenings'
-      };
 
       const newState = { 
         ...store, 
         applications: updatedApplications,
-        notifications: [agentNotification, ...store.notifications]
+        notifications: [{
+          id: `n_app_${Date.now()}`,
+          userId: finalAgentId,
+          title: editingId ? 'Dossier Updated' : 'New Tenancy Application',
+          message: `${formData.firstName} ${formData.surname} has ${editingId ? 'updated' : 'submitted'} a tenancy dossier.`,
+          type: NotificationType.INFO,
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          linkTo: 'screenings'
+        }, ...store.notifications]
       };
+      
       saveStore(newState);
       setIsSubmitting(false);
       setActiveTab('history');
       setEditingId(null);
-      setFormData({
-        firstName: '', surname: '', middleName: '', maritalStatus: 'Single', gender: 'Male',
-        currentHomeAddress: '', occupation: '', familySize: 1, phoneNumber: user.phone || '',
-        reasonForRelocating: '', currentLandlordName: '', currentLandlordPhone: '',
-        verificationType: 'NIN', verificationIdNumber: '', verificationUrl: '',
-        passportPhotoUrl: '', agentIdCode: '', signature: '',
-        applicationDate: new Date().toISOString().split('T')[0]
-      });
+      setStep(1);
+      setFormData(initialFormData);
     }, 1500);
   };
 
   const nextStep = () => setStep(s => s + 1);
   const prevStep = () => setStep(s => s - 1);
 
-  const getStatusStyle = (status: ApplicationStatus) => {
-    switch (status) {
-      case ApplicationStatus.APPROVED: return 'bg-emerald-600/10 text-emerald-500 border-emerald-500/20';
-      case ApplicationStatus.REJECTED: return 'bg-rose-600/10 text-rose-500 border-rose-500/20';
-      case ApplicationStatus.PENDING: return 'bg-amber-600/10 text-amber-500 border-amber-600/20';
-      default: return 'bg-zinc-800 text-zinc-400 border-zinc-700';
-    }
+  const handleDownload = (app: TenantApplication) => {
+    setPrintApp(app);
+    setTimeout(() => {
+      window.print();
+      setPrintApp(null);
+    }, 100);
   };
 
-  const isStep1Valid = formData.firstName && formData.surname && formData.phoneNumber && formData.gender;
-  const isStep2Valid = formData.currentHomeAddress && formData.occupation && formData.reasonForRelocating;
-  const isStep3Valid = !!formData.verificationUrl && !!formData.passportPhotoUrl && formData.verificationIdNumber;
-  const isStep4Valid = !!targetAgent;
-  const isStep5Valid = formData.signature && formData.signature.length > 2;
-
   return (
-    <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in duration-500 pb-24">
+    <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in duration-500 pb-20 print:p-0">
       <header className="text-center space-y-6 print:hidden">
-        <div className="inline-flex items-center px-6 py-2 bg-blue-600 text-white rounded-full text-[10px] font-black uppercase tracking-[0.3em]">
-           Tenancy Hub • Global Enrollment
-        </div>
-        <h1 className="text-5xl font-black text-white tracking-tighter">
-          {editingId ? 'Modify Dossier' : 'Dossier Filing'}
-        </h1>
-        
-        <div className="flex justify-center p-1 bg-zinc-900 rounded-3xl w-fit mx-auto border border-zinc-800">
+        <h1 className="text-4xl font-black text-zinc-900 dark:text-white tracking-tighter uppercase">Tenancy Application Form</h1>
+        <div className="flex justify-center p-1.5 bg-white dark:bg-zinc-900 rounded-3xl w-fit mx-auto border border-zinc-100 dark:border-zinc-800 shadow-sm">
            <button 
-             onClick={() => { setActiveTab('new'); setViewingApp(null); setStep(1); setEditingId(null); }} 
-             className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'new' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}
+             onClick={() => { setActiveTab('new'); setStep(1); setEditingId(null); setFormData(initialFormData); }} 
+             className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'new' ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-500 hover:text-blue-600'}`}
            >
-             <UserPlus className="inline-block mr-2 w-4 h-4" /> {editingId ? 'Editing Form' : 'Filing Form'}
+             <UserPlus className="inline-block mr-2 w-4 h-4" /> {editingId ? 'Editing Form' : 'Start Enrollment'}
            </button>
            <button 
-             onClick={() => { setActiveTab('history'); setViewingApp(null); }} 
-             className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white text-black shadow-lg' : 'text-zinc-500 hover:text-white'}`}
+             onClick={() => setActiveTab('history')} 
+             className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-500 hover:text-blue-600'}`}
            >
-             <History className="inline-block mr-2 w-4 h-4" /> Active Submissions ({myApplications.length})
+             <History className="inline-block mr-2 w-4 h-4" /> Submitted Dossiers
            </button>
         </div>
       </header>
 
       {activeTab === 'new' ? (
-        <div className="space-y-12 print:hidden">
-          <div className="text-center">
-            <p className="text-zinc-500 font-bold uppercase text-[10px] tracking-[0.3em]">Stage {step} of 5</p>
-            <div className="flex gap-2 max-w-xs mx-auto mt-4">
-                {[1,2,3,4,5].map(i => (
-                    <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-500 ${i <= step ? 'bg-blue-600 shadow-xl' : 'bg-zinc-800'}`}></div>
-                ))}
-            </div>
+        <div className="space-y-10 print:hidden">
+          <div className="flex gap-2 max-w-sm mx-auto">
+              {[1,2,3,4,5].map(i => (
+                  <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-700 ${i <= step ? 'bg-blue-600' : 'bg-zinc-200 dark:bg-zinc-800'}`}></div>
+              ))}
           </div>
 
-          <div className="bg-zinc-900 p-8 md:p-14 rounded-[3.5rem] border border-zinc-800 shadow-2xl">
+          <div className="bg-white dark:bg-zinc-900 p-8 md:p-14 rounded-[3.5rem] border border-zinc-100 dark:border-zinc-800 shadow-2xl">
             {step === 1 && (
                <div className="space-y-10 animate-in slide-in-from-right-4 duration-500">
-                   <div className="flex items-center gap-4 text-blue-500">
-                       <UserCheck size={32} />
-                       <h3 className="text-2xl font-black">Personal Identity</h3>
+                   <div className="flex items-center gap-4 text-blue-600">
+                       <UserIcon size={32} />
+                       <h3 className="text-2xl font-black">{editingId ? 'Modify Identity' : 'Identity Credentials'}</h3>
                    </div>
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                        <InputGroup label="Surname" value={formData.surname!} onChange={v => setFormData({...formData, surname: v})} />
                        <InputGroup label="First Name" value={formData.firstName!} onChange={v => setFormData({...formData, firstName: v})} />
-                       <InputGroup label="Other Name" value={formData.middleName!} onChange={v => setFormData({...formData, middleName: v})} />
+                       <InputGroup label="Other Names" value={formData.middleName!} onChange={v => setFormData({...formData, middleName: v})} />
                    </div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <SelectGroup label="Gender" value={formData.gender!} options={['Male', 'Female']} onChange={v => setFormData({...formData, gender: v as any})} />
-                      <SelectGroup label="Marital Status" value={formData.maritalStatus!} options={['Single', 'Married', 'Widower', 'Widow']} onChange={v => setFormData({...formData, maritalStatus: v as any})} />
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4">
+                      <InputGroup label="Date of Birth" type="date" value={formData.dob!} onChange={v => setFormData({...formData, dob: v})} />
+                      <SelectGroup label="Biological Gender" value={formData.gender!} options={['Male', 'Female']} onChange={v => setFormData({...formData, gender: v as any})} />
+                      <SelectGroup label="Marital Status" value={formData.maritalStatus!} options={['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']} onChange={v => setFormData({...formData, maritalStatus: v as any})} />
                    </div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-zinc-800">
-                       <InputGroup label="Phone Number" value={formData.phoneNumber!} onChange={v => setFormData({...formData, phoneNumber: v})} placeholder="+234..." />
-                   </div>
-                   <button onClick={nextStep} disabled={!isStep1Valid} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-xs disabled:opacity-50 flex items-center justify-center gap-2 transform active:scale-95 transition-all">Proceed to Background <ArrowRight size={16} /></button>
+                   <button onClick={nextStep} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] shadow-xl shadow-blue-600/20 transform active:scale-95 transition-all">Next: Professional Status <ArrowRight size={18} className="inline ml-2" /></button>
                </div>
             )}
 
             {step === 2 && (
                <div className="space-y-10 animate-in slide-in-from-right-4 duration-500">
-                   <div className="flex items-center gap-4 text-blue-500">
-                       <MapPin size={32} />
-                       <h3 className="text-2xl font-black">Residential History</h3>
+                   <div className="flex items-center gap-4 text-blue-600">
+                       <Briefcase size={32} />
+                       <h3 className="text-2xl font-black">Professional & Contact</h3>
                    </div>
-                   <div className="space-y-6">
-                       <InputGroup label="Current Home Address" value={formData.currentHomeAddress!} onChange={v => setFormData({...formData, currentHomeAddress: v})} />
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <InputGroup label="Occupation" value={formData.occupation!} onChange={v => setFormData({...formData, occupation: v})} />
-                          <InputGroup label="Family Size" type="number" value={formData.familySize!} onChange={v => setFormData({...formData, familySize: parseInt(v) || 0})} />
-                       </div>
-                   </div>
-                   <div className="p-8 bg-black/40 rounded-[2.5rem] border border-zinc-800 space-y-6">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                         <InputGroup label="Current Landlord Name" value={formData.currentLandlordName!} onChange={v => setFormData({...formData, currentLandlordName: v})} />
-                         <InputGroup label="Landlord Contact" value={formData.currentLandlordPhone!} onChange={v => setFormData({...formData, currentLandlordPhone: v})} />
-                      </div>
-                      <InputGroup label="Reason for Relocation" value={formData.reasonForRelocating!} onChange={v => setFormData({...formData, reasonForRelocating: v})} isTextArea />
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                       <InputGroup label="Current Occupation" value={formData.occupation!} onChange={v => setFormData({...formData, occupation: v})} />
+                       <InputGroup label="Family Size" type="number" value={formData.familySize!} onChange={v => setFormData({...formData, familySize: parseInt(v)})} />
+                       <InputGroup label="Phone Number" value={formData.phoneNumber!} onChange={v => setFormData({...formData, phoneNumber: v})} />
                    </div>
                    <div className="flex gap-4">
-                       <button onClick={prevStep} className="flex-1 bg-zinc-800 text-zinc-400 py-6 rounded-3xl font-black uppercase tracking-widest text-xs">Back</button>
-                       <button onClick={nextStep} disabled={!isStep2Valid} className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2">Verify Documents <ArrowRight size={16} /></button>
+                      <button onClick={prevStep} className="flex-1 bg-offwhite py-6 rounded-3xl font-black uppercase text-[10px] text-zinc-400">Back</button>
+                      <button onClick={nextStep} className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] shadow-xl">Next: Residential History <ArrowRight size={18} className="inline ml-2" /></button>
                    </div>
                </div>
             )}
 
             {step === 3 && (
                <div className="space-y-10 animate-in slide-in-from-right-4 duration-500">
-                   <div className="flex items-center gap-4 text-blue-500">
-                       <Fingerprint size={32} />
-                       <h3 className="text-2xl font-black">Digital Verification</h3>
+                   <div className="flex items-center gap-4 text-blue-600">
+                       <MapPin size={32} />
+                       <h3 className="text-2xl font-black">Residential History</h3>
                    </div>
-                   
+                   <InputGroup label="Current House Address" isTextArea value={formData.currentHomeAddress!} onChange={v => setFormData({...formData, currentHomeAddress: v})} />
+                   <InputGroup label="Reason for Relocation" isTextArea value={formData.reasonForRelocating!} onChange={v => setFormData({...formData, reasonForRelocating: v})} />
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <div className="space-y-4">
-                        <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Passport Photograph</label>
-                        <input type="file" ref={passportInputRef} className="hidden" accept="image/*" onChange={e => handleFileUpload(e, 'passportPhotoUrl')} />
-                        <button onClick={() => passportInputRef.current?.click()} className={`w-full aspect-square rounded-[3rem] border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-all relative overflow-hidden ${formData.passportPhotoUrl ? 'border-blue-500 bg-blue-500/10' : 'border-zinc-800 bg-black/20 hover:border-zinc-600'}`}>
-                           {formData.passportPhotoUrl ? (
-                             <img src={formData.passportPhotoUrl} className="absolute inset-0 w-full h-full object-cover" alt="Passport" />
-                           ) : (
-                             <>
-                               <Camera size={32} className="text-zinc-600" />
-                               <span className="text-[10px] font-black uppercase text-zinc-500">Click to Capture</span>
-                             </>
-                           )}
-                        </button>
-                      </div>
-
-                      <div className="space-y-6">
-                        <SelectGroup label="ID Document Type" value={formData.verificationType!} options={['NIN', 'Passport', "Voter's Card", "Driver's License"]} onChange={v => setFormData({...formData, verificationType: v as any})} />
-                        <InputGroup label="Document Number" value={formData.verificationIdNumber!} onChange={v => setFormData({...formData, verificationIdNumber: v})} />
-                        
-                        <div className="space-y-4 pt-4">
-                           <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">Identity Scan</label>
-                           <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => handleFileUpload(e, 'verificationUrl')} />
-                           <button onClick={() => fileInputRef.current?.click()} className={`w-full h-40 rounded-[2rem] border-2 border-dashed flex flex-col items-center justify-center gap-2 transition-all relative overflow-hidden ${formData.verificationUrl ? 'border-blue-500 bg-blue-500/10' : 'border-zinc-800 bg-black/20 hover:border-zinc-600'}`}>
-                              {formData.verificationUrl ? (
-                                <img src={formData.verificationUrl} className="absolute inset-0 w-full h-full object-cover opacity-60" alt="ID Scan" />
-                              ) : (
-                                <>
-                                  <ImageIcon size={24} className="text-zinc-600" />
-                                  <span className="text-[10px] font-black uppercase text-zinc-500">Upload Doc Scan</span>
-                                </>
-                              )}
-                           </button>
-                        </div>
-                      </div>
+                       <InputGroup label="Name of Current Landlord" value={formData.currentLandlordName!} onChange={v => setFormData({...formData, currentLandlordName: v})} />
+                       <InputGroup label="Landlord Phone Number" value={formData.currentLandlordPhone!} onChange={v => setFormData({...formData, currentLandlordPhone: v})} />
                    </div>
-
-                   <div className="flex gap-4 pt-6">
-                       <button onClick={prevStep} className="flex-1 bg-zinc-800 text-zinc-400 py-6 rounded-3xl font-black uppercase tracking-widest text-xs">Back</button>
-                       <button onClick={nextStep} disabled={!isStep3Valid} className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-xs">Route to Agent <ArrowRight size={16} /></button>
+                   <div className="flex gap-4">
+                      <button onClick={prevStep} className="flex-1 bg-offwhite py-6 rounded-3xl font-black uppercase text-[10px] text-zinc-400">Back</button>
+                      <button onClick={nextStep} className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] shadow-xl">Next: ID Verification <ArrowRight size={18} className="inline ml-2" /></button>
                    </div>
                </div>
             )}
 
             {step === 4 && (
-               <div className="space-y-10 animate-in slide-in-from-right-4 duration-500 text-center">
-                   <div className="inline-block p-8 bg-blue-600/10 rounded-full text-blue-500 mb-2">
-                      <UserCheck size={64} />
+               <div className="space-y-10 animate-in slide-in-from-right-4 duration-500">
+                   <div className="flex items-center gap-4 text-blue-600">
+                       <ShieldCheck size={32} />
+                       <h3 className="text-2xl font-black">Identity Verification</h3>
                    </div>
-                   <h3 className="text-3xl font-black">Final Routing</h3>
-                   <div className="max-w-md mx-auto space-y-8">
-                       <p className="text-zinc-500 font-bold leading-relaxed">Enter your Agent's unique Suite ID code. This dossier will be privately routed to their Command Center for review.</p>
-                       <div className="relative">
-                          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-600" size={24} />
-                          <input 
-                            className="w-full pl-16 pr-8 py-6 bg-black border-2 border-zinc-800 rounded-[2.5rem] text-2xl font-black text-white outline-none focus:ring-4 focus:ring-blue-600/20 tracking-widest uppercase transition-all" 
-                            placeholder="SUITE-AGENT-ID" 
-                            value={formData.agentIdCode} 
-                            onChange={e => setFormData({...formData, agentIdCode: e.target.value})} 
-                          />
-                       </div>
-                       {formData.agentIdCode && (
-                          <div className={`p-6 rounded-3xl border-2 animate-in zoom-in duration-300 ${targetAgent ? 'bg-emerald-600/10 border-emerald-500/40 text-emerald-400' : 'bg-rose-600/10 border-rose-500/40 text-rose-400'}`}>
-                             {targetAgent ? (
-                               <div className="flex items-center justify-center gap-3">
-                                 <CheckCircle size={20} />
-                                 <span className="font-black uppercase text-xs">Verified Agent: {targetAgent.name}</span>
-                               </div>
-                             ) : (
-                               <div className="flex items-center justify-center gap-3">
-                                 <AlertCircle size={20} />
-                                 <span className="font-black uppercase text-xs">Invalid Agent ID — Check Code</span>
-                               </div>
-                             )}
-                          </div>
-                       )}
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                       <SelectGroup label="Select ID Type" value={formData.verificationType!} options={['NIN', "Voter's Card", 'Passport', 'Drivers License']} onChange={v => setFormData({...formData, verificationType: v as any})} />
+                       <InputGroup label="ID Number" value={formData.verificationIdNumber!} onChange={v => setFormData({...formData, verificationIdNumber: v})} />
                    </div>
-                   <div className="flex gap-4 pt-10">
-                       <button onClick={prevStep} className="flex-1 bg-zinc-800 text-zinc-400 py-6 rounded-3xl font-black uppercase tracking-widest text-xs">Back</button>
-                       <button onClick={nextStep} disabled={!isStep4Valid} className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-xs">Seal Dossier <ArrowRight size={16} /></button>
+                   
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+                      <div className="space-y-4">
+                         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Photo of Valid ID</label>
+                         <div 
+                           onClick={() => fileInputRef.current?.click()}
+                           className="h-48 rounded-3xl bg-offwhite dark:bg-black border-2 border-dashed border-zinc-100 flex flex-col items-center justify-center cursor-pointer overflow-hidden group"
+                         >
+                            {formData.verificationUrl ? (
+                               <img src={formData.verificationUrl} className="w-full h-full object-cover" />
+                            ) : (
+                               <div className="text-center group-hover:scale-110 transition-transform">
+                                  <ImageIcon size={32} className="text-zinc-300 mx-auto mb-2" />
+                                  <p className="text-[9px] font-black uppercase text-zinc-400">Click to Upload ID</p>
+                               </div>
+                            )}
+                         </div>
+                         <input type="file" hidden ref={fileInputRef} accept="image/*" onChange={e => handleFileUpload(e, 'verificationUrl')} />
+                      </div>
+
+                      <div className="space-y-4">
+                         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Passport Photo</label>
+                         <div 
+                           onClick={() => passportInputRef.current?.click()}
+                           className="h-48 rounded-3xl bg-offwhite dark:bg-black border-2 border-dashed border-zinc-100 flex flex-col items-center justify-center cursor-pointer overflow-hidden group"
+                         >
+                            {formData.passportPhotoUrl ? (
+                               <img src={formData.passportPhotoUrl} className="w-full h-full object-cover" />
+                            ) : (
+                               <div className="text-center group-hover:scale-110 transition-transform">
+                                  <Camera size={32} className="text-zinc-300 mx-auto mb-2" />
+                                  <p className="text-[9px] font-black uppercase text-zinc-400">Upload Portrait</p>
+                               </div>
+                            )}
+                         </div>
+                         <input type="file" hidden ref={passportInputRef} accept="image/*" onChange={e => handleFileUpload(e, 'passportPhotoUrl')} />
+                      </div>
+                   </div>
+
+                   <div className="flex gap-4">
+                      <button onClick={prevStep} className="flex-1 bg-offwhite py-6 rounded-3xl font-black uppercase text-[10px] text-zinc-400">Back</button>
+                      <button onClick={nextStep} className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] shadow-xl">Next: Final Authorization <ArrowRight size={18} className="inline ml-2" /></button>
                    </div>
                </div>
             )}
 
             {step === 5 && (
                <div className="space-y-10 animate-in slide-in-from-right-4 duration-500">
-                   <div className="flex items-center gap-4 text-blue-500">
+                   <div className="flex items-center gap-4 text-blue-600">
                        <PenTool size={32} />
-                       <h3 className="text-2xl font-black">Authentication</h3>
+                       <h3 className="text-2xl font-black">Final Authorization</h3>
                    </div>
-                   <div className="bg-white rounded-[3rem] p-10 md:p-14 space-y-12">
-                       <div className="flex justify-between items-center pb-6 border-b border-zinc-100">
-                           <div className="flex items-center gap-2 text-zinc-400">
-                             <Calendar size={16} />
-                             <span className="text-[10px] font-black uppercase tracking-widest">Enrollment Date</span>
-                           </div>
-                           <span className="text-black font-black text-sm">{formData.applicationDate}</span>
-                       </div>
+                   
+                   <div className="p-8 bg-offwhite dark:bg-black rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800">
+                      <div className="flex items-center gap-4 mb-6 text-zinc-500">
+                         <UserCheck size={20} />
+                         <span className="text-xs font-bold uppercase tracking-widest">Target Agent Routing</span>
+                      </div>
+                      <InputGroup label="Agent ID / Unique Code" value={formData.agentIdCode!} onChange={v => setFormData({...formData, agentIdCode: v})} placeholder="Enter official Agent ID..." />
+                      {targetAgent ? (
+                         <div className="mt-4 flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-2xl animate-in fade-in">
+                            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-black text-xs">{targetAgent.name.charAt(0)}</div>
+                            <div className="text-[10px]">
+                               <p className="font-black uppercase">Recipient Verified</p>
+                               <p className="font-bold opacity-70">{targetAgent.name} • Registry ID: {targetAgent.id}</p>
+                            </div>
+                         </div>
+                      ) : formData.agentIdCode && (
+                        <p className="mt-2 text-[10px] text-zinc-400 font-bold ml-1 italic">Dossier will be routed to general registry for manual allocation.</p>
+                      )}
+                   </div>
 
-                       <div className="space-y-6">
-                           <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest text-center">Digital Legal Signature</label>
-                           <input 
-                               className="w-full px-8 py-14 bg-zinc-50 border-4 border-dashed border-zinc-100 rounded-[2.5rem] text-5xl font-serif italic text-black text-center outline-none" 
-                               placeholder="Type Full Legal Name"
-                               value={formData.signature}
-                               onChange={e => setFormData({...formData, signature: e.target.value})}
-                           />
-                           <p className="text-[10px] text-zinc-400 text-center font-bold uppercase tracking-[0.2em] leading-relaxed">
-                             I certify that the information provided is accurate and my digital signature holds legal validity.
-                           </p>
-                       </div>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                       <InputGroup label="Digital Signature (Full Legal Name)" value={formData.signature!} onChange={v => setFormData({...formData, signature: v})} />
+                       <InputGroup label="Application Date" type="date" value={formData.applicationDate!} onChange={v => setFormData({...formData, applicationDate: v})} />
                    </div>
-                   <div className="flex gap-4 pt-6">
-                       <button onClick={prevStep} className="flex-1 bg-zinc-800 text-zinc-400 py-6 rounded-3xl font-black uppercase tracking-widest text-xs">Back</button>
-                       <button 
-                           onClick={handleSubmit} 
-                           disabled={!isStep5Valid || isSubmitting}
-                           className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 shadow-2xl shadow-blue-900/40 disabled:opacity-50"
-                       >
-                           {isSubmitting ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-                           {isSubmitting ? 'Securing Records...' : (editingId ? 'Update Official Enrollment' : 'Submit Official Enrollment')}
-                       </button>
+
+                   <div className="flex gap-4">
+                      <button onClick={prevStep} className="flex-1 bg-offwhite py-6 rounded-3xl font-black uppercase text-[10px] text-zinc-400">Back</button>
+                      <button 
+                        onClick={handleSubmit} 
+                        disabled={isSubmitting || !formData.signature}
+                        className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] shadow-xl shadow-blue-600/20 flex items-center justify-center gap-3 disabled:opacity-50"
+                      >
+                         {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle size={20} />}
+                         {isSubmitting ? 'Securing Dossier...' : (editingId ? 'Seal Updates' : 'Seal Application & Submit')}
+                      </button>
                    </div>
                </div>
             )}
           </div>
         </div>
       ) : (
-        <div className="space-y-6">
-          {viewingApp ? (
-            <div className="animate-in slide-in-from-bottom-10 duration-700">
-               <div className="mb-8 flex justify-between items-center print:hidden">
-                 <button onClick={() => setViewingApp(null)} className="flex items-center text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-white transition-all">
-                   <ArrowLeft className="mr-2 w-4 h-4" /> Back to History
-                 </button>
-                 <div className="flex gap-3">
-                   <button onClick={() => handleEdit(viewingApp)} className="flex items-center gap-2 bg-zinc-800 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-zinc-700 transition-all">
-                     <Edit3 size={16} /> Modify Details
-                   </button>
-                   <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl">
-                     <Download size={16} /> Export Dossier
-                   </button>
-                 </div>
-               </div>
-
-               {/* Full View Dossier */}
-               <div className="bg-white rounded-[4rem] overflow-hidden shadow-2xl print:shadow-none print:rounded-none">
-                  {/* PDF Header (Hidden in app) */}
-                  <div className="hidden print:flex items-center justify-between border-b-[8px] border-blue-600 p-12 mb-10">
-                    <div className="flex items-center gap-4">
-                      <div className="bg-zinc-900 text-white p-5 rounded-3xl"><Building size={32} /></div>
-                      <div>
-                        <h1 className="text-4xl font-black text-zinc-900 tracking-tighter">PMS</h1>
-                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Official Tenancy Enrollment</p>
+        <div className="space-y-6 print:hidden">
+          {myApplications.length > 0 ? (
+            myApplications.map(app => (
+              <div key={app.id} className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800 flex flex-col md:flex-row items-center justify-between shadow-sm group hover:border-blue-200 transition-all gap-6">
+                <div className="flex items-center gap-6 flex-1">
+                    <div className="w-20 h-20 bg-offwhite dark:bg-black rounded-3xl flex items-center justify-center overflow-hidden border border-zinc-50 dark:border-zinc-800 shadow-xl">
+                      {app.passportPhotoUrl ? (
+                         <img src={app.passportPhotoUrl} className="w-full h-full object-cover" />
+                      ) : (
+                         <span className="font-black text-blue-600 text-xl">{app.firstName.charAt(0)}</span>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-2xl font-black text-zinc-900 dark:text-white leading-tight">{app.firstName} {app.surname}</h4>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mt-1">{app.status} • Filed: {new Date(app.submissionDate).toLocaleDateString()}</p>
+                      <div className="mt-2 flex items-center gap-4">
+                         <span className="text-[9px] font-black text-emerald-500 uppercase">Risk Index: {app.riskScore}%</span>
+                         <span className="text-[9px] font-black text-blue-600 uppercase">Agent ID: {app.agentIdCode}</span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Dossier ID</p>
-                      <p className="font-mono font-bold text-blue-600">{viewingApp.id}</p>
-                    </div>
-                  </div>
-
-                  <div className="bg-zinc-900 p-10 md:p-14 text-white flex flex-col md:flex-row justify-between items-center gap-10 print:bg-white print:text-black print:border-b print:pb-12">
-                    <div className="flex flex-col md:flex-row items-center gap-8">
-                      <div className="w-32 h-32 bg-white rounded-[2.5rem] overflow-hidden border-2 border-white/10 shadow-2xl print:border-zinc-200">
-                        <img src={viewingApp.passportPhotoUrl} className="w-full h-full object-cover" alt="Headshot" />
-                      </div>
-                      <div className="text-center md:text-left">
-                        <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-2">{viewingApp.firstName} {viewingApp.surname}</h2>
-                        <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
-                           <span className={`px-5 py-1.5 rounded-full text-[10px] font-black uppercase border ${getStatusStyle(viewingApp.status)}`}>
-                             {viewingApp.status} Candidate
-                           </span>
-                           <span className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">
-                             Filed {new Date(viewingApp.submissionDate).toLocaleDateString()}
-                           </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-center px-12 py-8 bg-black/40 rounded-[2.5rem] border border-white/5 print:bg-zinc-50 print:border-zinc-100 print:shadow-none">
-                      <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] mb-2">Stability Rating</p>
-                      <p className="text-6xl font-black text-emerald-400 print:text-emerald-600">{viewingApp.riskScore}%</p>
-                    </div>
-                  </div>
-
-                  <div className="p-10 md:p-16 space-y-16 text-black print:p-0 print:pt-12">
-                     <section className="space-y-8">
-                        <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.4em] border-b-2 border-zinc-100 pb-4 flex items-center">
-                           01: Profile Information
-                        </h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
-                           <DataPoint label="Surname" value={viewingApp.surname} />
-                           <DataPoint label="First Name" value={viewingApp.firstName} />
-                           <DataPoint label="Other Name" value={viewingApp.middleName} />
-                           <DataPoint label="Gender" value={viewingApp.gender} />
-                           <DataPoint label="Marital Status" value={viewingApp.maritalStatus} />
-                           <DataPoint label="Occupation" value={viewingApp.occupation} />
-                           <DataPoint label="Phone Number" value={viewingApp.phoneNumber} />
-                           <DataPoint label="Family Size" value={viewingApp.familySize} />
-                        </div>
-                     </section>
-
-                     <section className="space-y-8">
-                        <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.4em] border-b-2 border-zinc-100 pb-4 flex items-center">
-                           02: Residential History
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                           <DataPoint label="Current Address" value={viewingApp.currentHomeAddress} />
-                           <DataPoint label="Reason for Relocation" value={viewingApp.reasonForRelocating} />
-                           <DataPoint label="Current Landlord" value={viewingApp.currentLandlordName} />
-                           <DataPoint label="Landlord Phone" value={viewingApp.currentLandlordPhone} />
-                        </div>
-                     </section>
-
-                     <section className="space-y-8">
-                        <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.4em] border-b-2 border-zinc-100 pb-4 flex items-center">
-                           03: Identity Documents
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                           <div className="space-y-8">
-                              <DataPoint label="Verification Method" value={viewingApp.verificationType} />
-                              <DataPoint label="ID Number" value={viewingApp.verificationIdNumber} />
-                              <div className="bg-zinc-50 p-6 rounded-3xl border border-zinc-100">
-                                 <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">Verification Scan</p>
-                                 <img src={viewingApp.verificationUrl} className="w-full h-auto rounded-2xl max-h-56 object-contain shadow-xl" alt="ID Document" />
-                              </div>
-                           </div>
-                           <div className="p-12 bg-zinc-950 rounded-[3.5rem] flex flex-col items-center justify-center text-center print:bg-white print:border-4 print:rounded-none">
-                              <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-6">Digital Signature Authentication</p>
-                              <p className="text-5xl font-serif italic text-white border-b-2 border-zinc-800 pb-4 px-10 print:text-black print:border-zinc-200">
-                                {viewingApp.signature}
-                              </p>
-                              <div className="mt-8 flex items-center gap-3 text-emerald-500">
-                                 <ShieldCheck size={20} />
-                                 <span className="text-[9px] font-black uppercase tracking-[0.3em]">Authenticity Encrypted</span>
-                              </div>
-                           </div>
-                        </div>
-                     </section>
-
-                     <div className="hidden print:block pt-12 border-t text-center text-zinc-300">
-                        <p className="text-[8px] font-black uppercase tracking-[0.5em]">This is an official document of the PropLifecycle Suite</p>
-                     </div>
-                  </div>
-               </div>
-            </div>
+                </div>
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                    {app.status === ApplicationStatus.PENDING && (
+                      <button 
+                        onClick={() => handleEdit(app)}
+                        className="flex-1 md:flex-none p-5 bg-offwhite dark:bg-black rounded-2xl text-zinc-400 hover:text-blue-600 transition-all shadow-sm flex items-center justify-center"
+                      >
+                        <Edit3 size={20} />
+                      </button>
+                    )}
+                    <button 
+                      onClick={() => handleDownload(app)}
+                      className="flex-1 md:flex-none p-5 bg-offwhite dark:bg-black rounded-2xl text-zinc-400 hover:text-blue-600 hover:bg-white transition-all shadow-sm flex items-center justify-center gap-3 group"
+                    >
+                      <Download size={20} /> <span className="text-[9px] font-black uppercase tracking-widest hidden lg:inline">Download Record</span>
+                    </button>
+                    <button 
+                      onClick={() => setViewingApp(app)}
+                      className="flex-1 md:flex-none p-5 bg-offwhite dark:bg-black rounded-2xl text-zinc-400 hover:text-blue-600 transition-all shadow-sm flex items-center justify-center"
+                    >
+                      <Eye size={20} />
+                    </button>
+                </div>
+              </div>
+            ))
           ) : (
-            <div className="grid grid-cols-1 gap-6">
-              {myApplications.length > 0 ? myApplications.map(app => (
-                <div key={app.id} className="bg-zinc-900 border border-zinc-800 p-8 rounded-[3rem] flex flex-col md:flex-row justify-between items-center gap-8 group hover:border-blue-500 transition-all duration-500">
-                  <div className="flex items-center gap-8 w-full">
-                    <div className="w-20 h-20 bg-zinc-800 rounded-3xl overflow-hidden border border-zinc-700 shadow-xl group-hover:scale-110 transition-transform">
-                      <img src={app.passportPhotoUrl} className="w-full h-full object-cover grayscale group-hover:grayscale-0" alt="Headshot" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-3xl font-black text-white truncate">{app.firstName} {app.surname}</p>
-                      <div className="flex items-center gap-4 mt-2">
-                        <span className="text-[10px] font-black uppercase text-zinc-500 tracking-[0.2em]">ID: {app.id.substring(3)}</span>
-                        <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase border ${getStatusStyle(app.status)}`}>
-                          {app.status}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 shrink-0">
-                    <button onClick={() => setViewingApp(app)} className="bg-zinc-800 text-white p-5 rounded-2xl hover:bg-blue-600 transition-all shadow-xl"><Eye size={24} /></button>
-                    <button onClick={() => handleEdit(app)} className="bg-zinc-800 text-white p-5 rounded-2xl hover:bg-emerald-600 transition-all shadow-xl"><Edit3 size={24} /></button>
-                  </div>
+            <div className="bg-white dark:bg-zinc-900 p-16 rounded-[4rem] border-2 border-dashed border-zinc-100 dark:border-zinc-800 text-center space-y-8 shadow-sm">
+                <div className="w-24 h-24 bg-offwhite dark:bg-black rounded-full flex items-center justify-center mx-auto shadow-xl">
+                   <FileText size={40} className="text-zinc-200" />
                 </div>
-              )) : (
-                <div className="py-32 text-center bg-zinc-950 rounded-[4rem] border-2 border-dashed border-zinc-800 text-zinc-700">
-                   <FileText size={48} className="mx-auto mb-6 opacity-20" />
-                   <p className="font-black uppercase tracking-[0.3em] text-xs">No dossiers filed in current cycle.</p>
+                <div className="space-y-2">
+                   <h3 className="text-2xl font-black text-zinc-900 dark:text-white">Submission History Empty</h3>
+                   <p className="text-zinc-400 text-sm max-w-xs mx-auto font-medium">No tenancy dossiers found on your registry. Begin your enrollment process to start a new lifecycle.</p>
                 </div>
-              )}
+                <button 
+                  onClick={() => { setActiveTab('new'); setStep(1); }}
+                  className="bg-blue-600 text-white px-12 py-5 rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-2xl shadow-blue-600/20 active:scale-95 transition-all"
+                >
+                  Start Filling Form Now
+                </button>
             </div>
           )}
         </div>
       )}
 
+      {/* VIEW MODAL - Overhauled for full detail visibility and high-res image expansion */}
+      {viewingApp && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-0 md:p-4 bg-white/95 backdrop-blur-xl animate-in fade-in duration-300">
+           <div className="bg-white dark:bg-zinc-900 w-full max-w-6xl md:rounded-[3rem] shadow-2xl border border-zinc-100 dark:border-zinc-800 flex flex-col h-full md:h-auto md:max-h-[95vh] overflow-hidden">
+              <header className="p-6 md:p-8 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-offwhite dark:bg-black shrink-0">
+                 <div className="flex items-center gap-4 md:gap-6">
+                    <div className="w-10 h-10 md:w-14 md:h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-lg md:text-xl">SY</div>
+                    <div>
+                       <h2 className="text-lg md:text-2xl font-black text-zinc-900 dark:text-white tracking-tighter">APPLICATION DOSSIER</h2>
+                       <p className="text-[8px] md:text-[9px] font-black uppercase tracking-[0.3em] text-blue-600">Review Mode • {viewingApp.id}</p>
+                    </div>
+                 </div>
+                 <div className="flex items-center gap-2 md:gap-4">
+                    {viewingApp.status === ApplicationStatus.PENDING && (
+                      <button onClick={() => handleEdit(viewingApp)} className="hidden sm:flex p-3 md:p-4 bg-white dark:bg-zinc-800 text-blue-600 rounded-xl md:rounded-2xl border border-blue-100 shadow-sm items-center gap-2 font-black uppercase text-[9px] md:text-[10px] tracking-widest">
+                        <Edit3 size={16} /> Edit Dossier
+                      </button>
+                    )}
+                    <button onClick={() => setViewingApp(null)} className="p-2 md:p-4 bg-offwhite dark:bg-black rounded-full text-zinc-400 hover:text-rose-500 transition-colors">
+                       <X size={20} md:size={24} />
+                    </button>
+                 </div>
+              </header>
+
+              <div className="flex-1 overflow-y-auto p-6 md:p-14 custom-scrollbar">
+                 {/* Top Hero Section: Passport & Primary ID */}
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-16 mb-12 md:mb-16">
+                    <div className="col-span-1 space-y-4">
+                       <div 
+                         onClick={() => viewingApp.passportPhotoUrl && setExpandedImage(viewingApp.passportPhotoUrl)}
+                         className="relative w-full aspect-[4/5] overflow-hidden rounded-3xl md:rounded-[2.5rem] shadow-2xl border-4 border-white dark:border-zinc-800 bg-zinc-100 group cursor-pointer"
+                       >
+                          <img src={viewingApp.passportPhotoUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt="Passport" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                             <Maximize2 className="text-white" size={32} />
+                          </div>
+                       </div>
+                       <p className="text-center text-[9px] font-black text-zinc-400 uppercase tracking-widest">Click photo for High Resolution View</p>
+                    </div>
+                    <div className="col-span-1 md:col-span-2 space-y-8 md:space-y-12">
+                       <div className="flex flex-wrap items-center gap-4 md:gap-8">
+                          <div className="flex-1 min-w-[200px]">
+                            <h3 className="text-3xl md:text-5xl font-black text-zinc-900 dark:text-white tracking-tighter leading-none mb-2">{viewingApp.firstName} {viewingApp.surname}</h3>
+                            <div className="flex items-center gap-4">
+                               <span className="px-4 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 text-[10px] font-black uppercase rounded-full border border-blue-100 dark:border-blue-800">{viewingApp.status}</span>
+                               <span className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">Submitted: {new Date(viewingApp.submissionDate).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          <div className="bg-emerald-50 dark:bg-emerald-900/20 p-6 md:p-8 rounded-3xl border border-emerald-100 dark:border-emerald-800 text-center shrink-0">
+                             <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase mb-1">Stability Rating</p>
+                             <p className="text-4xl md:text-5xl font-black text-emerald-600 dark:text-emerald-400">{viewingApp.riskScore}%</p>
+                          </div>
+                       </div>
+                       
+                       <section className="grid grid-cols-2 lg:grid-cols-3 gap-6 md:gap-10">
+                          <PrintRow label="Surname" value={viewingApp.surname} />
+                          <PrintRow label="First Name" value={viewingApp.firstName} />
+                          <PrintRow label="Middle Names" value={viewingApp.middleName} />
+                          <PrintRow label="Date of Birth" value={viewingApp.dob} />
+                          <PrintRow label="Gender" value={viewingApp.gender} />
+                          <PrintRow label="Marital Status" value={viewingApp.maritalStatus} />
+                       </section>
+                    </div>
+                 </div>
+
+                 <div className="space-y-12 md:space-y-16">
+                    {/* Professional & Contact */}
+                    <section className="space-y-8">
+                       <h3 className="text-[9px] md:text-[10px] font-black text-zinc-400 uppercase tracking-[0.4em] border-b border-zinc-100 dark:border-zinc-800 pb-4 flex items-center gap-2"><Briefcase size={14}/> Professional & Contact Details</h3>
+                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 md:gap-10 p-8 md:p-12 bg-offwhite dark:bg-black rounded-3xl md:rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800">
+                          <PrintRow label="Occupation" value={viewingApp.occupation} />
+                          <PrintRow label="Family Size" value={viewingApp.familySize} />
+                          <PrintRow label="Primary Mobile" value={viewingApp.phoneNumber} />
+                       </div>
+                    </section>
+
+                    {/* Residential Details */}
+                    <section className="space-y-8">
+                       <h3 className="text-[9px] md:text-[10px] font-black text-zinc-400 uppercase tracking-[0.4em] border-b border-zinc-100 dark:border-zinc-800 pb-4 flex items-center gap-2"><MapPin size={14}/> Residential History</h3>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
+                          <PrintRow label="Current House Address" value={viewingApp.currentHomeAddress} />
+                          <PrintRow label="Reason for Relocation" value={viewingApp.reasonForRelocating} />
+                       </div>
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 md:gap-10 p-8 md:p-12 bg-offwhite dark:bg-black rounded-3xl md:rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800">
+                          <PrintRow label="Current Landlord Name" value={viewingApp.currentLandlordName} />
+                          <PrintRow label="Landlord Mobile Number" value={viewingApp.currentLandlordPhone} />
+                       </div>
+                    </section>
+
+                    {/* Verification Details */}
+                    <section className="space-y-8">
+                       <h3 className="text-[9px] md:text-[10px] font-black text-zinc-400 uppercase tracking-[0.4em] border-b border-zinc-100 dark:border-zinc-800 pb-4 flex items-center gap-2"><ShieldCheck size={14}/> Identity & Credentials</h3>
+                       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12 items-start">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                             <PrintRow label="ID Method" value={viewingApp.verificationType} />
+                             <PrintRow label="Reference ID" value={viewingApp.verificationIdNumber} />
+                             <PrintRow label="Routing Code" value={viewingApp.agentIdCode} />
+                             <PrintRow label="Date Filed" value={viewingApp.applicationDate} />
+                          </div>
+                          <div className="space-y-4">
+                             <div 
+                               onClick={() => viewingApp.verificationUrl && setExpandedImage(viewingApp.verificationUrl)}
+                               className="relative bg-offwhite dark:bg-black p-4 md:p-6 rounded-3xl border border-zinc-100 dark:border-zinc-800 overflow-hidden cursor-pointer group"
+                             >
+                                <p className="text-[8px] md:text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-4">Official Identification scan</p>
+                                {viewingApp.verificationUrl ? (
+                                  <img src={viewingApp.verificationUrl} className="w-full h-auto max-h-48 md:max-h-64 object-contain rounded-xl shadow-lg bg-white transition-transform group-hover:scale-[1.02]" />
+                                ) : (
+                                  <div className="py-12 text-center text-zinc-300 italic text-xs">No document scan provided</div>
+                                )}
+                                {viewingApp.verificationUrl && (
+                                   <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                      <Maximize2 className="text-white" size={24} />
+                                   </div>
+                                )}
+                             </div>
+                             <p className="text-center text-[8px] font-black text-zinc-400 uppercase tracking-widest">Click scan for High Resolution View</p>
+                          </div>
+                       </div>
+                    </section>
+
+                    {/* AI Assessment (for completeness) */}
+                    <section className="p-8 md:p-12 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-3xl md:rounded-[2.5rem]">
+                       <div className="flex items-center gap-3 mb-4">
+                          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white"><AlertCircle size={18}/></div>
+                          <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Intelligence Portfolio Briefing</h4>
+                       </div>
+                       <p className="text-sm md:text-base font-bold text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
+                         "{viewingApp.aiRecommendation}"
+                       </p>
+                    </section>
+
+                    <footer className="pt-8 md:pt-12 border-t border-zinc-100 dark:border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-end gap-10">
+                       <div className="w-full md:w-auto">
+                          <p className="text-[9px] md:text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">Dossier Authorization Signature</p>
+                          <div className="p-6 md:p-10 bg-offwhite dark:bg-black rounded-3xl border border-zinc-50 dark:border-zinc-800">
+                             <p className="text-3xl md:text-5xl font-serif italic text-zinc-900 dark:text-white pb-2 tracking-tight">{viewingApp.signature}</p>
+                             <div className="mt-4 flex items-center gap-2 text-emerald-500 font-black text-[9px] uppercase tracking-widest">
+                                <CheckCircle size={14}/> Sealed via Digital Fingerprint
+                             </div>
+                          </div>
+                       </div>
+                       <div className="text-right w-full md:w-auto">
+                          <p className="text-[9px] md:text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Official Submission Ref</p>
+                          <p className="text-base font-mono text-zinc-900 dark:text-white opacity-50">{viewingApp.id}</p>
+                       </div>
+                    </footer>
+                 </div>
+              </div>
+              
+              {/* Mobile CTA */}
+              {viewingApp.status === ApplicationStatus.PENDING && (
+                <div className="p-4 bg-offwhite dark:bg-black border-t border-zinc-100 dark:border-zinc-800 sm:hidden">
+                  <button onClick={() => handleEdit(viewingApp)} className="w-full py-4 bg-blue-600 text-white rounded-2xl flex items-center justify-center gap-2 font-black uppercase text-[10px] tracking-widest">
+                    <Edit3 size={16} /> Modify Application Data
+                  </button>
+                </div>
+              )}
+           </div>
+        </div>
+      )}
+
+      {/* LIGHTBOX / IMAGE EXPANDER - High Res Viewer */}
+      {expandedImage && (
+        <div 
+          className="fixed inset-0 z-[150] bg-black/95 backdrop-blur-3xl flex items-center justify-center p-4 md:p-10 animate-in fade-in zoom-in-95 duration-300"
+          onClick={() => setExpandedImage(null)}
+        >
+           <button 
+             className="absolute top-8 right-8 p-4 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
+             onClick={(e) => { e.stopPropagation(); setExpandedImage(null); }}
+           >
+              <X size={32} />
+           </button>
+           <div className="relative w-full h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
+              <img 
+                src={expandedImage} 
+                className="max-w-full max-h-full object-contain rounded-2xl shadow-[0_0_100px_rgba(37,99,235,0.2)]" 
+                alt="Expanded View"
+              />
+           </div>
+        </div>
+      )}
+
+      {/* PRINT-ONLY Dossier Layout */}
+      {printApp && (
+        <div className="hidden print:block fixed inset-0 bg-white z-[99999] p-20 text-black">
+          <div className="flex justify-between items-center border-b-8 border-blue-600 pb-12 mb-12">
+             <div className="flex items-center gap-6">
+                <div className="w-20 h-20 bg-blue-600 flex items-center justify-center text-white rounded-2xl font-black text-3xl">SY</div>
+                <div>
+                   <h1 className="text-4xl font-black tracking-tighter">TENANCY APPLICATION RECORD</h1>
+                   <p className="text-xs font-bold uppercase tracking-[0.4em] text-blue-600">Official Lifecycle Dossier</p>
+                </div>
+             </div>
+             <div className="text-right">
+                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">System Reference</p>
+                <p className="font-mono text-sm font-bold">{printApp.id}</p>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-12 mb-12">
+             <div className="col-span-1">
+                <img src={printApp.passportPhotoUrl} className="w-full h-64 object-cover rounded-3xl border-4 border-zinc-50" />
+             </div>
+             <div className="col-span-2 grid grid-cols-2 gap-x-8 gap-y-10 py-4">
+                <PrintRow label="Full Legal Name" value={`${printApp.surname}, ${printApp.firstName} ${printApp.middleName}`} />
+                <PrintRow label="Date of Birth" value={printApp.dob} />
+                <PrintRow label="Gender" value={printApp.gender} />
+                <PrintRow label="Marital Status" value={printApp.maritalStatus} />
+                <PrintRow label="Occupation" value={printApp.occupation} />
+                <PrintRow label="Phone Number" value={printApp.phoneNumber} />
+             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-12 border-t border-zinc-100 pt-12 mb-12">
+             <PrintRow label="Residential Address" value={printApp.currentHomeAddress} />
+             <PrintRow label="Reason for Relocation" value={printApp.reasonForRelocating} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-12 bg-zinc-50 p-10 rounded-[2.5rem] mb-12">
+             <PrintRow label="Current Landlord" value={printApp.currentLandlordName} />
+             <PrintRow label="Landlord Contact" value={printApp.currentLandlordPhone} />
+          </div>
+
+          <div className="grid grid-cols-3 gap-12 border-t border-zinc-100 pt-12 mb-12">
+             <PrintRow label="Verification Type" value={printApp.verificationType} />
+             <PrintRow label="ID Number" value={printApp.verificationIdNumber} />
+             <PrintRow label="Target Agent ID" value={printApp.agentIdCode} />
+          </div>
+
+          <div className="flex justify-between items-end pt-20 border-t-2 border-dashed border-zinc-200">
+             <div>
+                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">Applicant Legal Signature</p>
+                <p className="text-4xl font-serif italic border-b-2 border-zinc-200 px-10 pb-4">{printApp.signature}</p>
+             </div>
+             <div className="text-right">
+                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Enrollment Date</p>
+                <p className="text-xl font-black">{printApp.applicationDate}</p>
+             </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @media print {
-          html, body, #root, main, .flex, .flex-1, .max-w-6xl, .h-screen, .overflow-auto { height: auto !important; overflow: visible !important; position: static !important; background: white !important; color: black !important; }
-          aside, nav, header, .print\\:hidden { display: none !important; }
-          main { padding: 0 !important; margin: 0 !important; width: 100% !important; }
-          @page { size: A4; margin: 2cm; }
-          .bg-zinc-900, .bg-zinc-950, .bg-black { background-color: white !important; color: black !important; }
-          .text-white { color: black !important; }
-          section { page-break-inside: avoid; }
+          body * { visibility: hidden; }
+          .print\\:block, .print\\:block * { visibility: visible; }
+          .print\\:block { position: absolute; left: 0; top: 0; width: 100%; }
         }
       `}</style>
     </div>
   );
 };
 
-const InputGroup = ({ label, value, onChange, placeholder = '', type = 'text', isTextArea = false }: any) => (
+const InputGroup = ({ label, value, onChange, type = 'text', placeholder = '', isTextArea = false }: any) => (
   <div className="space-y-2">
-    <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{label}</label>
+    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">{label}</label>
     {isTextArea ? (
-      <textarea 
-        className="w-full px-5 py-4 bg-white rounded-2xl text-sm font-bold text-black outline-none focus:ring-4 focus:ring-blue-600/20 h-24 resize-none" 
-        value={value} 
-        onChange={e => onChange(e.target.value)} 
-        placeholder={placeholder}
-      />
+      <textarea className="w-full px-6 py-5 bg-offwhite dark:bg-black border border-zinc-100 dark:border-zinc-800 rounded-2xl text-sm font-bold text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-600 outline-none transition-all resize-none h-32" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
     ) : (
-      <input 
-        type={type}
-        className="w-full px-5 py-4 bg-white rounded-2xl text-sm font-bold text-black outline-none focus:ring-4 focus:ring-blue-600/20" 
-        value={value} 
-        onChange={e => onChange(e.target.value)} 
-        placeholder={placeholder}
-      />
+      <input type={type} className="w-full px-6 py-5 bg-offwhite dark:bg-black border border-zinc-100 dark:border-zinc-800 rounded-2xl text-sm font-bold text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-600 outline-none transition-all" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
     )}
   </div>
 );
 
 const SelectGroup = ({ label, value, options, onChange }: any) => (
   <div className="space-y-2">
-    <label className="block text-[10px] font-black text-zinc-500 uppercase tracking-widest ml-1">{label}</label>
-    <select 
-      className="w-full px-5 py-4 bg-white rounded-2xl text-sm font-bold text-black outline-none appearance-none cursor-pointer" 
-      value={value} 
-      onChange={e => onChange(e.target.value)}
-    >
-      {options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-    </select>
+    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">{label}</label>
+    <div className="relative">
+      <select className="w-full px-6 py-5 bg-offwhite dark:bg-black border border-zinc-100 dark:border-zinc-800 rounded-2xl text-sm font-bold text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-600 outline-none transition-all appearance-none cursor-pointer" value={value} onChange={e => onChange(e.target.value)}>
+        {options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+      </select>
+      <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" size={18} />
+    </div>
   </div>
 );
 
-const DataPoint = ({ label, value }: { label: string, value: string | number | undefined }) => (
-  <div className="space-y-1">
-    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-none mb-1">{label}</p>
-    <p className="text-sm font-bold text-black leading-tight">{value || 'N/A'}</p>
+const PrintRow = ({ label, value }: { label: string, value: any }) => (
+  <div className="min-w-0">
+    <p className="text-[9px] md:text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">{label}</p>
+    <p className="text-base md:text-lg font-bold text-zinc-900 dark:text-white leading-tight break-words">{value || 'N/A'}</p>
   </div>
 );
 

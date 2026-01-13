@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { User, UserRole, Property, Agreement } from '../types';
 import { getStore } from '../store';
@@ -62,7 +61,7 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `PropLifecycle_Report_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `SPACEYA_Report_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };

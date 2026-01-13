@@ -1,6 +1,6 @@
 {
-  "name": "PMS (Property Management Suite)",
-  "description": "A comprehensive property lifecycle management application for agents and tenants, featuring AI-powered maintenance assessment and role-based dashboards.",
+  "name": "SPACEYA",
+  "description": "A comprehensive space and property lifecycle management application for agents and tenants, featuring AI-powered maintenance assessment and role-based dashboards.",
   "requestFramePermissions": [
     "camera"
   ]

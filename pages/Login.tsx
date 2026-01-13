@@ -1,12 +1,8 @@
-
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
 import { getStore, saveStore } from '../store';
 import { Apple, Mail, Phone, ArrowRight, Home, Users, UserCheck, Smartphone, Lock, ShieldCheck, AlertCircle } from 'lucide-react';
-
-interface LoginProps {
-  onLogin: (user: User) => void;
-}
+import { Logo } from '../App';
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -16,6 +12,11 @@ const GoogleIcon = () => (
     <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
   </svg>
 );
+
+// Added interface LoginProps to fix the reported error on line 17
+interface LoginProps {
+  onLogin: (user: User) => void;
+}
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [isRegistering, setIsRegistering] = useState(false);
@@ -33,7 +34,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     const store = getStore();
     const user = store.users.find(u => u.email.toLowerCase() === email.toLowerCase());
     
-    // In this simulation, we check for existence. In production, we'd verify password.
     if (user) {
       onLogin(user);
     } else {
@@ -119,11 +119,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <div className="bg-zinc-900 p-10 text-white text-center border-b border-zinc-800">
             <div className="flex justify-center mb-6">
               <div className="bg-white/5 p-5 rounded-[1.5rem] backdrop-blur-md border border-white/10 shadow-xl">
-                <Home size={40} className="text-blue-600" />
+                <Logo size={40} className="text-blue-600" />
               </div>
             </div>
-            <h2 className="text-5xl font-black tracking-tighter text-white">PMS</h2>
-            <p className="mt-2 text-blue-400 font-bold tracking-widest text-xs uppercase">Property Suite</p>
+            <h2 className="text-5xl font-black tracking-tighter text-white">SPACEYA</h2>
+            <p className="mt-2 text-blue-400 font-bold tracking-widest text-xs uppercase">Space Intelligence Suite</p>
           </div>
           
           <div className="flex border-b border-zinc-100 bg-zinc-50">
@@ -132,7 +132,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </div>
 
           <div className="p-8 md:p-10 bg-white">
-            {/* Added AlertCircle to fix 'Cannot find name AlertCircle' error */}
             {error && <div className="mb-6 bg-red-50 text-red-500 p-4 rounded-2xl text-xs font-bold border border-red-100 flex items-center gap-2"><AlertCircle size={14} /> {error}</div>}
             
             <div className="space-y-4">

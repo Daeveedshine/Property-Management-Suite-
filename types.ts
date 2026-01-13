@@ -71,7 +71,8 @@ export interface TenantApplication {
   firstName: string;
   surname: string;
   middleName: string;
-  maritalStatus: 'Single' | 'Married' | 'Widower' | 'Widow';
+  dob: string;
+  maritalStatus: 'Single' | 'Married' | 'Divorced' | 'Widow' | 'Widower' | 'Separated';
   gender: 'Male' | 'Female';
   currentHomeAddress: string;
   occupation: string;

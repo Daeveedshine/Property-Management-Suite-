@@ -1,4 +1,3 @@
-
 import React, { useMemo, useState } from 'react';
 import { User, UserRole, Payment } from '../types';
 import { getStore, saveStore } from '../store';
@@ -140,7 +139,7 @@ const Payments: React.FC<PaymentsProps> = ({ user }) => {
                     {isProcessing ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <span className="mr-2 font-bold text-lg">₦</span>}
                     {isProcessing ? 'Processing Transaction...' : 'Confirm & Pay Now'}
                   </button>
-                  <p className="text-[10px] text-center text-slate-400">Encrypted by PropLifecycle SecurePay</p>
+                  <p className="text-[10px] text-center text-slate-400">Encrypted by SPACEYA SecurePay</p>
                 </div>
               )}
             </div>

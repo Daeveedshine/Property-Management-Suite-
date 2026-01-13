@@ -5,7 +5,7 @@ import {
   ClipboardCheck, CheckCircle, XCircle, 
   Search, ChevronRight, ShieldCheck, Mail, Phone, Calendar, Download,
   User as UserIcon, MapPin, Briefcase, Info, Users, Home, Printer, FileText,
-  BadgeCheck, Building
+  BadgeCheck, Building, Maximize2, X
 } from 'lucide-react';
 
 interface ScreeningsProps {
@@ -17,6 +17,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
   const [store, setStore] = useState(getStore());
   const [selectedApp, setSelectedApp] = useState<TenantApplication | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   const relevantApps = useMemo(() => {
     if (user.role === UserRole.ADMIN) return store.applications;
@@ -125,7 +126,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
                   <div className="flex items-center gap-4">
                     <div className="bg-blue-600 p-4 rounded-2xl"><Building size={24} /></div>
                     <div>
-                      <h1 className="text-3xl font-black tracking-tighter">PMS PORTFOLIO</h1>
+                      <h1 className="text-3xl font-black tracking-tighter">SPACEYA PORTFOLIO</h1>
                       <p className="text-[9px] font-bold uppercase tracking-[0.3em] text-blue-400">Official Tenancy Enrollment Form</p>
                     </div>
                   </div>
@@ -137,14 +138,20 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
 
                <div className="bg-zinc-900 p-12 text-white flex flex-col md:flex-row justify-between items-center gap-8 border-b-8 border-blue-600 print:bg-transparent print:text-black print:border-none print:p-12 print:pt-0">
                   <div className="flex items-center gap-8">
-                    <div className="w-24 h-24 bg-white rounded-3xl overflow-hidden border-2 border-white/10 shadow-2xl print:border-zinc-200 print:shadow-none">
+                    <div 
+                      onClick={() => selectedApp.passportPhotoUrl && setExpandedImage(selectedApp.passportPhotoUrl)}
+                      className="w-24 h-24 bg-white rounded-3xl overflow-hidden border-2 border-white/10 shadow-2xl print:border-zinc-200 print:shadow-none cursor-pointer group relative"
+                    >
                       {selectedApp.passportPhotoUrl ? (
-                        <img src={selectedApp.passportPhotoUrl} className="w-full h-full object-cover" alt="Profile" />
+                        <img src={selectedApp.passportPhotoUrl} className="w-full h-full object-cover transition-transform group-hover:scale-110" alt="Profile" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-zinc-300 text-3xl font-black">
                           {selectedApp.firstName.charAt(0)}
                         </div>
                       )}
+                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Maximize2 size={16} />
+                      </div>
                     </div>
                     <div>
                       <h2 className="text-4xl font-black tracking-tighter print:text-black">{selectedApp.firstName} {selectedApp.surname}</h2>
@@ -204,12 +211,20 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
                             <DetailRow label="Document Category" value={selectedApp.verificationType} />
                             <DetailRow label="Document Reference" value={selectedApp.verificationIdNumber} />
                           </div>
-                          <div className="bg-zinc-50 p-6 rounded-3xl border border-zinc-100 shadow-sm print:shadow-none print:bg-transparent print:border-zinc-200">
+                          <div 
+                            onClick={() => selectedApp.verificationUrl && setExpandedImage(selectedApp.verificationUrl)}
+                            className="bg-zinc-50 p-6 rounded-3xl border border-zinc-100 shadow-sm print:shadow-none print:bg-transparent print:border-zinc-200 cursor-pointer group relative"
+                          >
                              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">Official Document Capture</p>
                              {selectedApp.verificationUrl ? (
-                               <img src={selectedApp.verificationUrl} className="w-full h-auto rounded-2xl max-h-64 object-contain shadow-xl print:shadow-none print:border print:border-zinc-200" alt="ID Document" />
+                               <img src={selectedApp.verificationUrl} className="w-full h-auto rounded-2xl max-h-64 object-contain shadow-xl print:shadow-none print:border print:border-zinc-200 transition-transform group-hover:scale-[1.02]" alt="ID Document" />
                              ) : (
                                <div className="py-20 text-center text-zinc-300 italic text-xs">No scan data attached.</div>
+                             )}
+                             {selectedApp.verificationUrl && (
+                               <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                 <Maximize2 size={24} className="text-zinc-500" />
+                               </div>
                              )}
                           </div>
                        </div>
@@ -248,8 +263,8 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
                   
                   {/* Print Footer - Only visible on print */}
                   <div className="hidden print:block pt-12 border-t border-zinc-100 text-center text-[8px] font-black text-zinc-300 uppercase tracking-[0.5em]">
-                    This dossier is an official record produced by the Property Lifecycle Management Suite. 
-                    <br />© {new Date().getFullYear()} PMS Global Operations.
+                    This dossier is an official record produced by SPACEYA. 
+                    <br />© {new Date().getFullYear()} SPACEYA Global Operations.
                   </div>
                </div>
             </div>
@@ -261,6 +276,28 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
           )}
         </div>
       </div>
+
+      {/* LIGHTBOX / IMAGE EXPANDER */}
+      {expandedImage && (
+        <div 
+          className="fixed inset-0 z-[150] bg-black/95 backdrop-blur-3xl flex items-center justify-center p-4 md:p-10 animate-in fade-in zoom-in-95 duration-300 print:hidden"
+          onClick={() => setExpandedImage(null)}
+        >
+           <button 
+             className="absolute top-8 right-8 p-4 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
+             onClick={(e) => { e.stopPropagation(); setExpandedImage(null); }}
+           >
+              <X size={32} />
+           </button>
+           <div className="relative w-full h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
+              <img 
+                src={expandedImage} 
+                className="max-w-full max-h-full object-contain rounded-2xl shadow-[0_0_100px_rgba(37,99,235,0.2)]" 
+                alt="Expanded View"
+              />
+           </div>
+        </div>
+      )}
 
       <style>{`
         @media print {
