@@ -13,7 +13,6 @@ const GoogleIcon = () => (
   </svg>
 );
 
-// Added interface LoginProps to fix the reported error on line 17
 interface LoginProps {
   onLogin: (user: User) => void;
 }
@@ -55,11 +54,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       return;
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
-    }
-    
     const store = getStore();
     if (store.users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
       setError('This email is already registered.');
@@ -70,14 +64,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       ? `AGT-${Math.random().toString(36).substr(2, 6).toUpperCase()}` 
       : `u${Date.now()}`;
 
-    const newUser: User = {
-      id: uniqueId,
-      name,
-      email,
-      role,
-      phone
-    };
-
+    const newUser: User = { id: uniqueId, name, email, role, phone };
     const newState = { ...store, users: [...store.users, newUser] };
     saveStore(newState);
     onLogin(newUser);
@@ -94,13 +81,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         ? `AGT-SOCIAL-${Math.random().toString(36).substr(2, 4).toUpperCase()}` 
         : `u_social_${Date.now()}`;
 
-      user = {
-        id: uniqueId,
-        name: `${provider} User`,
-        email: socialEmail,
-        role: role,
-        phone: ''
-      };
+      user = { id: uniqueId, name: `${provider} User`, email: socialEmail, role: role, phone: '' };
       const newState = { ...store, users: [...store.users, user] };
       saveStore(newState);
     }
@@ -108,142 +89,127 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center p-4 overflow-hidden bg-black">
-      <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover z-0 opacity-40">
+    <div className="h-[100dvh] w-full relative overflow-y-auto bg-black custom-scrollbar">
+      {/* Fixed Background Elements */}
+      <video autoPlay muted loop playsInline className="fixed inset-0 w-full h-full object-cover z-0 opacity-40 grayscale blur-[2px]">
         <source src="https://assets.mixkit.co/videos/preview/mixkit-drone-shot-of-a-small-modern-house-in-the-forest-4309-large.mp4" type="video/mp4" />
       </video>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-[1px] z-1"></div>
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-[2px] z-1"></div>
 
-      <div className="max-w-md w-full relative z-10 animate-in fade-in slide-in-from-bottom-8 duration-700">
-        <div className="bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-white/20">
-          <div className="bg-zinc-900 p-10 text-white text-center border-b border-zinc-800">
-            <div className="flex justify-center mb-6">
-              <div className="bg-white/5 p-5 rounded-[1.5rem] backdrop-blur-md border border-white/10 shadow-xl">
-                <Logo size={40} className="text-blue-600" />
+      {/* Scrollable Content Wrapper */}
+      <div className="relative z-10 min-h-full flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 lg:p-12 pb-24 md:pb-32">
+        <div className="max-w-md w-full animate-in fade-in slide-in-from-bottom-12 duration-1000">
+          <div className="glass-card rounded-[3rem] md:rounded-[4.5rem] shadow-[0_32px_128px_rgba(0,0,0,0.5)] overflow-hidden border-white/20 dark:border-white/5">
+            <div className="bg-black/40 backdrop-blur-3xl p-8 md:p-14 text-center border-b border-white/10">
+              <div className="flex justify-center mb-6 md:mb-10">
+                <div className="bg-white/10 p-5 md:p-6 rounded-[1.8rem] md:rounded-[2.5rem] backdrop-blur-3xl border border-white/20 shadow-2xl animate-pulse-gentle">
+                  <Logo size={44} className="text-white" />
+                </div>
               </div>
+              <h2 className="text-4xl md:text-5xl font-semibold tracking-tighter text-white">SPACEYA</h2>
+              <p className="mt-2 text-blue-400 font-playfair italic text-base md:text-lg tracking-widest opacity-80">Your Space, Handled</p>
             </div>
-            <h2 className="text-5xl font-black tracking-tighter text-white">SPACEYA</h2>
-            <p className="mt-2 text-blue-400 font-bold tracking-widest text-xs uppercase">Space Intelligence Suite</p>
-          </div>
-          
-          <div className="flex border-b border-zinc-100 bg-zinc-50">
-            <button onClick={() => { setIsRegistering(false); setError(''); }} className={`flex-1 py-5 text-[10px] font-black uppercase tracking-widest transition-all ${!isRegistering ? 'text-blue-600 bg-white' : 'text-zinc-400'}`}>Sign In</button>
-            <button onClick={() => { setIsRegistering(true); setError(''); }} className={`flex-1 py-5 text-[10px] font-black uppercase tracking-widest transition-all ${isRegistering ? 'text-blue-600 bg-white' : 'text-zinc-400'}`}>Register</button>
-          </div>
-
-          <div className="p-8 md:p-10 bg-white">
-            {error && <div className="mb-6 bg-red-50 text-red-500 p-4 rounded-2xl text-xs font-bold border border-red-100 flex items-center gap-2"><AlertCircle size={14} /> {error}</div>}
             
-            <div className="space-y-4">
-              <p className="text-center text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">
-                {isRegistering ? 'Join with' : 'Continue with'}
-              </p>
-              <div className="flex gap-4">
-                <button 
-                  type="button" 
-                  onClick={() => simulateSocialAuth('Apple')} 
-                  className="flex-1 py-4 bg-black text-white rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-zinc-800 transition-all active:scale-[0.98]"
-                >
-                  <Apple size={18} />
-                  Apple
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => simulateSocialAuth('Google')} 
-                  className="flex-1 py-4 bg-white border border-zinc-200 text-zinc-800 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-zinc-50 transition-all active:scale-[0.98]"
-                >
-                  <GoogleIcon />
-                  Google
-                </button>
-              </div>
-
-              <div className="flex items-center gap-4 my-8">
-                <div className="flex-1 h-px bg-zinc-100"></div>
-                <span className="text-[10px] font-black text-zinc-300 uppercase tracking-widest">or</span>
-                <div className="flex-1 h-px bg-zinc-100"></div>
-              </div>
+            <div className="flex bg-black/20 backdrop-blur-md">
+              <button 
+                onClick={() => { setIsRegistering(false); setError(''); }} 
+                className={`flex-1 py-5 md:py-7 text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] transition-all border-b-2 ${!isRegistering ? 'text-white bg-white/10 border-blue-600' : 'text-zinc-500 border-transparent hover:text-white'}`}
+              >
+                Sign In
+              </button>
+              <button 
+                onClick={() => { setIsRegistering(true); setError(''); }} 
+                className={`flex-1 py-5 md:py-7 text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] md:tracking-[0.3em] transition-all border-b-2 ${isRegistering ? 'text-white bg-white/10 border-blue-600' : 'text-zinc-500 border-transparent hover:text-white'}`}
+              >
+                Register
+              </button>
             </div>
 
-            <form className="space-y-5" onSubmit={isRegistering ? handleRegister : handleLogin}>
-              {isRegistering && (
-                <>
-                  <div className="space-y-3">
-                    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">Select Persona</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setRole(UserRole.TENANT)}
-                        className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${
-                          role === UserRole.TENANT 
-                            ? 'border-blue-600 bg-blue-50 text-blue-600' 
-                            : 'border-zinc-100 bg-zinc-50 text-zinc-400 grayscale hover:grayscale-0'
-                        }`}
-                      >
-                        <Users size={24} className="mb-2" />
-                        <span className="text-[10px] font-black uppercase">Tenant / Buyer</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRole(UserRole.AGENT)}
-                        className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${
-                          role === UserRole.AGENT 
-                            ? 'border-blue-600 bg-blue-50 text-blue-600' 
-                            : 'border-zinc-100 bg-zinc-50 text-zinc-400 grayscale hover:grayscale-0'
-                        }`}
-                      >
-                        <UserCheck size={24} className="mb-2" />
-                        <span className="text-[10px] font-black uppercase">Agent / Seller</span>
-                      </button>
+            <div className="p-8 md:p-14 bg-transparent space-y-8">
+              {error && (
+                <div className="bg-rose-500/20 text-rose-200 p-5 rounded-2xl text-[10px] font-black uppercase border border-rose-500/30 flex items-center gap-3 backdrop-blur-md animate-in shake duration-500">
+                  <AlertCircle size={16} /> {error}
+                </div>
+              )}
+              
+              <form className="space-y-6" onSubmit={isRegistering ? handleRegister : handleLogin}>
+                {isRegistering && (
+                  <div className="space-y-6 animate-in fade-in duration-500">
+                    <div className="space-y-4">
+                      <label className="block text-[9px] md:text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest mb-2 ml-1 opacity-60">Identity Tier</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        <button type="button" onClick={() => setRole(UserRole.TENANT)} className={`flex flex-col items-center justify-center p-5 rounded-2xl border-2 transition-all ${role === UserRole.TENANT ? 'border-blue-600 bg-blue-600/20 text-white' : 'border-white/5 bg-white/5 text-zinc-500 opacity-60 hover:opacity-100'}`}>
+                          <Users size={24} className="mb-2" />
+                          <span className="text-[10px] font-black uppercase">Tenant</span>
+                        </button>
+                        <button type="button" onClick={() => setRole(UserRole.AGENT)} className={`flex flex-col items-center justify-center p-5 rounded-2xl border-2 transition-all ${role === UserRole.AGENT ? 'border-blue-600 bg-blue-600/20 text-white' : 'border-white/5 bg-white/5 text-zinc-500 opacity-60 hover:opacity-100'}`}>
+                          <UserCheck size={24} className="mb-2" />
+                          <span className="text-[10px] font-black uppercase">Agent</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] md:text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2 ml-1 opacity-60">Legal Fullname</label>
+                      <input required className="glass-input w-full p-5 rounded-2xl text-white text-sm font-bold outline-none" value={name} onChange={e => setName(e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] md:text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2 ml-1 opacity-60">Phone Number</label>
+                      <div className="relative">
+                        <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+                        <input type="tel" className="glass-input w-full pl-14 pr-5 py-5 rounded-2xl text-white text-sm font-bold outline-none" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+234" />
+                      </div>
                     </div>
                   </div>
+                )}
 
+                <div className="space-y-6">
                   <div>
-                    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">Legal Name</label>
-                    <input required className="w-full px-5 py-4 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-black" value={name} onChange={e => setName(e.target.value)} />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">Phone Number</label>
+                    <label className="block text-[9px] md:text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2 ml-1 opacity-60">Email Address</label>
                     <div className="relative">
-                      <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300" size={18} />
-                      <input className="w-full pl-11 pr-5 py-4 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-black" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+234 (800) 000-0000" />
+                      <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+                      <input required type="email" className="glass-input w-full pl-14 pr-5 py-5 rounded-2xl text-white text-sm font-bold outline-none" value={email} onChange={e => setEmail(e.target.value)} />
                     </div>
                   </div>
-                </>
-              )}
 
-              <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">Email Address</label>
-                <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300" size={18} />
-                  <input required type="email" className="w-full pl-11 pr-5 py-4 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-black" value={email} onChange={e => setEmail(e.target.value)} />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">
-                  {isRegistering ? 'Create Password' : 'Secure Password'}
-                </label>
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300" size={18} />
-                  <input required type="password" title="Password" className="w-full pl-11 pr-5 py-4 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-black" value={password} onChange={e => setPassword(e.target.value)} />
-                </div>
-              </div>
-
-              {isRegistering && (
-                <div>
-                  <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">Confirm Password</label>
-                  <div className="relative">
-                    <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-300" size={18} />
-                    <input required type="password" title="Confirm Password" className="w-full pl-11 pr-5 py-4 rounded-2xl border border-zinc-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-black" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                  <div>
+                    <label className="block text-[9px] md:text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2 ml-1 opacity-60">Security Key</label>
+                    <div className="relative">
+                      <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+                      <input required type="password" title="Password" className="glass-input w-full pl-14 pr-5 py-5 rounded-2xl text-white text-sm font-bold outline-none" value={password} onChange={e => setPassword(e.target.value)} />
+                    </div>
                   </div>
-                </div>
-              )}
 
-              <button type="submit" className="w-full bg-blue-600 text-white font-black py-5 rounded-[1.5rem] shadow-xl shadow-blue-100 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center">
-                {isRegistering ? 'Create Profile' : 'Access Hub'} <ArrowRight className="ml-2 w-5 h-5" />
-              </button>
-            </form>
+                  {isRegistering && (
+                    <div className="animate-in fade-in duration-500">
+                      <label className="block text-[9px] md:text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2 ml-1 opacity-60">Confirm Key</label>
+                      <div className="relative">
+                        <ShieldCheck className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
+                        <input required type="password" title="Confirm Password" className="glass-input w-full pl-14 pr-5 py-5 rounded-2xl text-white text-sm font-bold outline-none" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-6 rounded-3xl shadow-2xl shadow-blue-600/30 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center text-[10px] md:text-[11px] uppercase tracking-[0.2em] md:tracking-[0.3em] mt-4">
+                  {isRegistering ? 'Register' : 'Login'} <ArrowRight className="ml-3 w-5 h-5" />
+                </button>
+              </form>
+
+              <div className="flex items-center gap-4 py-4">
+                <div className="flex-1 h-px bg-white/10"></div>
+                <span className="text-[10px] font-black text-zinc-600 uppercase tracking-widest">or bridge via</span>
+                <div className="flex-1 h-px bg-white/10"></div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-4">
+                <button onClick={() => simulateSocialAuth('Apple')} className="flex-1 py-5 glass-input text-white rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-white/10 transition-all active:scale-95">
+                  <Apple size={20} /> Apple
+                </button>
+                <button onClick={() => simulateSocialAuth('Google')} className="flex-1 py-5 glass-input text-white rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-white/10 transition-all active:scale-95">
+                  <GoogleIcon /> Google
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

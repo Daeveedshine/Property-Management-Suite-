@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   AGENT = 'AGENT',
@@ -73,6 +74,8 @@ export interface Property {
   description?: string;
   category: PropertyCategory;
   type: PropertyType;
+  rentStartDate?: string;
+  rentExpiryDate?: string;
 }
 
 export interface TenantApplication {

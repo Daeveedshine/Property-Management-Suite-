@@ -22,7 +22,19 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const reportData = useMemo(() => {
-    const tenants = store.users.filter(u => u.role === UserRole.TENANT);
+    // 1. Get base tenants
+    let tenants = store.users.filter(u => u.role === UserRole.TENANT);
+    
+    // 2. Filter tenants based on Agent's own properties
+    if (user.role === UserRole.AGENT) {
+      const myPropertyIds = store.properties
+        .filter(p => p.agentId === user.id)
+        .map(p => p.id);
+      
+      tenants = tenants.filter(t => t.assignedPropertyId && myPropertyIds.includes(t.assignedPropertyId));
+    }
+
+    // 3. Map to report rows
     const rows: ReportRow[] = tenants.map(tenant => {
       const property = store.properties.find(p => p.id === tenant.assignedPropertyId);
       const agreement = store.agreements.find(a => a.tenantId === tenant.id && a.status === 'active');
@@ -45,12 +57,13 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
       };
     });
 
+    // 4. Apply search term
     return rows.filter(row => 
       row.tenantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       row.propertyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       row.tenantPhone.includes(searchTerm)
     );
-  }, [store, searchTerm]);
+  }, [store, searchTerm, user]);
 
   const handleExport = () => {
     const headers = ['Tenant', 'Phone', 'Property', 'Annual Rent (Naira)', 'Expiry Date'];
@@ -71,7 +84,7 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white">Tenant Portfolio Sheet</h1>
-          <p className="text-zinc-500 text-sm">Consolidated view of all occupied properties and lease terms.</p>
+          <p className="text-zinc-500 text-sm">Consolidated view of {user.role === UserRole.AGENT ? 'your' : 'all'} occupied properties and lease terms.</p>
         </div>
         <button 
           onClick={handleExport}
@@ -83,7 +96,7 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-sm">
-          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Total Active Leases</p>
+          <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Active Leases</p>
           <p className="text-2xl font-black text-blue-500">{reportData.filter(r => r.status === 'active').length}</p>
         </div>
         <div className="bg-zinc-900 p-5 rounded-2xl border border-zinc-800 shadow-sm">

@@ -55,57 +55,57 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-12">
       <header>
-        <h1 className="text-4xl font-black text-zinc-900 dark:text-white tracking-tighter">Overview</h1>
-        <p className="text-zinc-400 font-medium tracking-tight">Monitoring {user.name}'s space assets.</p>
+        <h1 className="text-5xl font-black text-zinc-900 dark:text-white tracking-tighter">Overview</h1>
+        <p className="text-zinc-500 font-medium tracking-tight mt-1">Lifecycle monitoring for {user.name}.</p>
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {user.role === UserRole.AGENT ? (
           <>
-            <StatCard label="Portfolio" value={stats.totalProperties} icon={Building} />
-            <StatCard label="Pipeline" value={stats.pendingApps} icon={UserPlus} />
-            <StatCard label="Repairs" value={stats.pendingTickets} icon={AlertTriangle} />
-            <StatCard label="Revenue" value={`₦${(stats.monthlyRevenue / 1000000).toFixed(1)}M`} icon={TrendingUp} />
+            <StatCard label="Portfolio" value={stats.totalProperties} icon={Building} color="blue" />
+            <StatCard label="Pipeline" value={stats.pendingApps} icon={UserPlus} color="purple" />
+            <StatCard label="Repairs" value={stats.pendingTickets} icon={AlertTriangle} color="orange" />
+            <StatCard label="Revenue" value={`₦${(stats.monthlyRevenue / 1000000).toFixed(1)}M`} icon={TrendingUp} color="emerald" />
           </>
         ) : (
           <>
-            <StatCard label="Property" value={stats.propertyName} icon={Building} />
-            <StatCard label="Rent Status" value={stats.rentStatus} icon={Clock} />
-            <StatCard label="Maintenance" value={stats.activeTickets} icon={Wrench} />
-            <StatCard label="Expiry" value={stats.leaseExpiry} icon={FileText} />
+            <StatCard label="Property" value={stats.propertyName} icon={Building} color="blue" />
+            <StatCard label="Rent Status" value={stats.rentStatus} icon={Clock} color="purple" />
+            <StatCard label="Maintenance" value={stats.activeTickets} icon={Wrench} color="orange" />
+            <StatCard label="Expiry" value={stats.leaseExpiry} icon={FileText} color="emerald" />
           </>
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] shadow-sm border border-zinc-100 dark:border-zinc-800">
-          <div className="flex items-center justify-between mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 glass-card p-8 rounded-[3rem] shadow-2xl">
+          <div className="flex items-center justify-between mb-10">
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-900 dark:text-white">Revenue Lifecycle</h3>
-            <div className="bg-offwhite dark:bg-black px-4 py-2 rounded-xl text-[10px] font-black uppercase text-zinc-400">Monthly Yield</div>
+            <div className="bg-blue-600/10 dark:bg-blue-400/10 px-4 py-2 rounded-xl text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 border border-blue-600/20">Monthly Yield</div>
           </div>
-          <div className="h-72 w-full min-w-0" style={{ minHeight: '300px' }}>
+          <div className="h-72 w-full min-w-0" style={{ minHeight: '320px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={paymentData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "#222" : "#F3F4F6"} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: isDark ? '#444' : '#9CA3AF', fontSize: 10, fontWeight: 'bold'}} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: isDark ? '#444' : '#9CA3AF', fontSize: 10, fontWeight: 'bold'}} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: isDark ? '#666' : '#9CA3AF', fontSize: 10, fontWeight: 'bold'}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fill: isDark ? '#666' : '#9CA3AF', fontSize: 10, fontWeight: 'bold'}} />
                 <Tooltip 
-                  cursor={{fill: isDark ? '#111' : '#F9FAFB'}}
-                  contentStyle={{backgroundColor: isDark ? '#000' : '#FFF', borderRadius: '16px', border: 'none', boxShadow: '0 10px 30px rgba(0,0,0,0.05)'}}
+                  cursor={{fill: 'rgba(37, 99, 235, 0.1)'}}
+                  contentStyle={{backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', borderRadius: '24px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 10px 30px rgba(0,0,0,0.1)'}}
                   itemStyle={{color: '#2563EB', fontWeight: 'bold'}}
                 />
-                <Bar dataKey="amount" fill="#2563EB" radius={[10, 10, 10, 10]} barSize={26} />
+                <Bar dataKey="amount" fill="#2563EB" radius={[12, 12, 12, 12]} barSize={28} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] shadow-sm border border-zinc-100 dark:border-zinc-800">
+        <div className="glass-card p-8 rounded-[3rem] shadow-2xl flex flex-col">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-900 dark:text-white">Alert Registry</h3>
-            <Bell className="w-4 h-4 text-blue-600" />
+            <Bell className="w-5 h-5 text-blue-600 animate-pulse" />
           </div>
-          <div className="space-y-4">
+          <div className="space-y-4 flex-1">
             {recentNotifications.length > 0 ? recentNotifications.map(notification => (
                 <AlertItem 
                     key={notification.id}
@@ -114,12 +114,13 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     time={new Date(notification.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
                 />
             )) : (
-                <div className="text-center py-16">
-                    <p className="text-zinc-300 text-xs font-black uppercase tracking-widest">Quiet Hub</p>
+                <div className="flex flex-col items-center justify-center h-full py-16 opacity-40">
+                    <Bell className="w-12 h-12 mb-4 text-zinc-300" />
+                    <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest">Quiet Hub</p>
                 </div>
             )}
           </div>
-          <button className="w-full mt-10 text-[9px] font-black uppercase tracking-[0.3em] text-blue-600 hover:text-zinc-900 dark:hover:text-white transition-colors">
+          <button className="w-full mt-8 py-4 glass-input rounded-2xl text-[9px] font-black uppercase tracking-[0.3em] text-blue-600 dark:text-blue-400 hover:scale-[1.02] transition-all">
               Access Full Archive
           </button>
         </div>
@@ -128,26 +129,35 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   );
 };
 
-const StatCard = ({ label, value, icon: Icon }: any) => {
+const StatCard = ({ label, value, icon: Icon, color }: any) => {
+  const colors: any = {
+    blue: 'text-blue-600 bg-blue-600/10 border-blue-600/20',
+    purple: 'text-purple-600 bg-purple-600/10 border-purple-600/20',
+    orange: 'text-orange-600 bg-orange-600/10 border-orange-600/20',
+    emerald: 'text-emerald-600 bg-emerald-600/10 border-emerald-600/20',
+  };
+
   return (
-    <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800 shadow-sm hover:border-blue-200 transition-colors">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.1em]">{label}</p>
-        <Icon className="w-4 h-4 text-blue-600" />
+    <div className="glass-card p-8 rounded-[2.8rem] border-white/20 hover:scale-105 transition-all duration-500 cursor-default group">
+      <div className="flex items-center justify-between mb-5">
+        <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest opacity-60 group-hover:opacity-100 transition-opacity">{label}</p>
+        <div className={`p-3 rounded-2xl border ${colors[color]}`}>
+          <Icon className="w-5 h-5" />
+        </div>
       </div>
-      <p className="text-xl font-black text-zinc-900 dark:text-white truncate tracking-tighter">{value}</p>
+      <p className="text-3xl font-black text-zinc-900 dark:text-white truncate tracking-tighter leading-none">{value}</p>
     </div>
   );
 };
 
 const AlertItem = ({ title, desc, time }: any) => {
   return (
-    <div className="p-4 bg-offwhite dark:bg-black rounded-2xl border border-zinc-100 dark:border-zinc-800">
-      <div className="flex justify-between items-start mb-1">
-        <h4 className="text-[9px] font-black uppercase text-zinc-900 dark:text-white tracking-tight">{title}</h4>
-        <span className="text-[9px] text-zinc-400 font-bold">{time}</span>
+    <div className="p-5 bg-white/5 backdrop-blur-md rounded-2xl border border-white/10 hover:bg-white/10 transition-colors">
+      <div className="flex justify-between items-start mb-2">
+        <h4 className="text-[10px] font-black uppercase text-zinc-900 dark:text-white tracking-tight">{title}</h4>
+        <span className="text-[9px] text-zinc-500 font-bold">{time}</span>
       </div>
-      <p className="text-[10px] leading-relaxed text-zinc-500 line-clamp-1">{desc}</p>
+      <p className="text-[11px] leading-relaxed text-zinc-500 line-clamp-2 font-medium">{desc}</p>
     </div>
   );
 };

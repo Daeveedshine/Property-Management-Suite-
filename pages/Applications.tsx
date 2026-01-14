@@ -425,7 +425,7 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
                       </button>
                     )}
                     <button onClick={() => setViewingApp(null)} className="p-2 md:p-4 bg-offwhite dark:bg-black rounded-full text-zinc-400 hover:text-rose-500 transition-colors">
-                       <X size={20} md:size={24} />
+                       <X size={24} />
                     </button>
                  </div>
               </header>

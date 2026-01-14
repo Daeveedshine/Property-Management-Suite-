@@ -58,11 +58,11 @@ const SplashScreen: React.FC = () => (
     </video>
     <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"></div>
     <div className="relative z-10 animate-pulse-gentle flex flex-col items-center text-center px-6">
-      <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl mb-8 transform hover:scale-105 transition-transform duration-500">
-        <Logo size={64} className="text-blue-600" />
+      <div className="bg-white/10 backdrop-blur-2xl p-8 rounded-[2.5rem] border border-white/20 shadow-2xl mb-8 transform hover:scale-105 transition-transform duration-500">
+        <Logo size={64} className="text-white" />
       </div>
-      <h1 className="text-6xl font-black tracking-tighter mb-2 drop-shadow-xl text-white">SPACEYA</h1>
-      <p className="text-blue-400 font-bold tracking-[0.4em] uppercase text-xs">Space Intelligence Suite</p>
+      <h1 className="text-6xl font-semibold tracking-tighter mb-2 drop-shadow-xl text-white">SPACEYA</h1>
+      <p className="text-blue-400 font-playfair tracking-widest text-lg italic">Your Space, Handled</p>
     </div>
   </div>
 );
@@ -162,23 +162,22 @@ const App: React.FC = () => {
 
   if (isLoading) return <SplashScreen />;
 
-  // If no user is logged in, show the Login page full screen without sidebar/header.
   if (!user) {
     return <Login onLogin={handleLogin} />;
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-offwhite text-zinc-900 dark:bg-black dark:text-white transition-colors duration-300 overflow-hidden">
-      {/* Mobile Header - 90/10 Logic: Background White, Accents Blue */}
-      <div className="md:hidden flex items-center justify-between bg-white dark:bg-zinc-900 p-4 shadow-sm border-b border-zinc-100 dark:border-zinc-800 shrink-0">
+    <div className="flex flex-col md:flex-row h-screen text-zinc-900 dark:text-white transition-colors duration-300 overflow-hidden relative">
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-between glass-card p-4 shadow-sm shrink-0 z-50">
         <div className="flex items-center gap-2">
-           <Logo size={24} className="text-blue-600" />
-           <h1 className="font-black text-xl tracking-tighter">SPACEYA</h1>
+           <Logo size={24} className="text-blue-600 dark:text-blue-400" />
+           <h1 className="font-semibold text-xl tracking-tighter">SPACEYA</h1>
         </div>
         <div className="flex items-center gap-3">
           <button 
             onClick={toggleTheme}
-            className="p-2 rounded-xl bg-offwhite dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
+            className="p-2 rounded-xl bg-white/10 dark:bg-black/20 text-zinc-500 dark:text-zinc-400"
           >
             {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
           </button>
@@ -188,27 +187,27 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Sidebar - Monochromatic Paper White for 90% aesthetic */}
-      <aside className={`${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 transition-transform md:translate-x-0 md:static md:inset-auto print:hidden border-r border-zinc-100 dark:border-zinc-800 flex flex-col`}>
-        <div className="p-6 h-full flex flex-col">
+      {/* Sidebar - Liquid Glass Style */}
+      <aside className={`${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-50 w-72 glass-card text-zinc-900 dark:text-zinc-100 transition-transform md:translate-x-0 md:static md:inset-auto print:hidden flex flex-col m-4 rounded-[2.5rem] border-white/20 dark:border-white/5`}>
+        <div className="p-8 h-full flex flex-col">
           <div className="hidden md:block mb-10 text-center">
-            <div className="inline-block bg-offwhite dark:bg-white/5 p-5 rounded-[1.5rem] mb-3">
-               <Logo size={40} className="text-blue-600" />
+            <div className="inline-block bg-blue-600/10 dark:bg-blue-400/10 p-5 rounded-[1.8rem] mb-4 border border-blue-600/20">
+               <Logo size={44} className="text-blue-600 dark:text-blue-400" />
             </div>
-            <h1 className="text-2xl font-black tracking-tighter text-zinc-900 dark:text-white">SPACEYA</h1>
-            <p className="text-[10px] text-zinc-400 uppercase mt-1 tracking-[0.3em] font-black">Lifecycle Manager</p>
+            <h1 className="text-2xl font-semibold tracking-tighter text-zinc-900 dark:text-white">SPACEYA</h1>
+            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase mt-1 tracking-[0.3em] font-black opacity-60">Property Manager</p>
           </div>
 
-          <nav className="space-y-1 flex-1 overflow-y-auto custom-scrollbar">
+          <nav className="space-y-1.5 flex-1 overflow-y-auto custom-scrollbar px-1">
             {navItems.filter(item => item.roles.includes(user?.role || UserRole.TENANT)).map(item => (
               <button
                 key={item.id}
                 onClick={() => { setView(item.id); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center px-4 py-3.5 text-xs font-bold rounded-xl transition-all relative ${view === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-zinc-500 dark:text-zinc-400 hover:bg-offwhite dark:hover:bg-white/5 hover:text-blue-600 dark:hover:text-white'}`}
+                className={`w-full flex items-center px-5 py-4 text-xs font-bold rounded-2xl transition-all relative ${view === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20 scale-[1.02]' : 'text-zinc-500 dark:text-zinc-400 hover:bg-white/10 dark:hover:bg-black/30 hover:text-blue-600 dark:hover:text-blue-400'}`}
               >
-                <item.icon className={`mr-3 h-4 w-4 ${view === item.id ? 'text-white' : 'text-zinc-400'}`} /> {item.label}
+                <item.icon className={`mr-4 h-4.5 w-4.5 ${view === item.id ? 'text-white' : 'text-zinc-400 group-hover:text-blue-600'}`} /> {item.label}
                 {item.badge ? (
-                  <span className="ml-auto bg-blue-600 dark:bg-blue-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black">
+                  <span className="ml-auto bg-blue-600 dark:bg-blue-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black border border-white/20">
                     {item.badge}
                   </span>
                 ) : null}
@@ -216,23 +215,24 @@ const App: React.FC = () => {
             ))}
           </nav>
 
-          <div className="pt-6 border-t border-zinc-100 dark:border-zinc-800 mt-6">
+          <div className="pt-6 border-t border-zinc-200 dark:border-white/10 mt-6 space-y-2">
              <button 
                onClick={toggleTheme}
-               className="w-full mb-4 flex items-center px-4 py-3 text-xs font-bold text-zinc-400 hover:bg-offwhite dark:hover:bg-white/5 rounded-xl transition-all"
+               className="w-full flex items-center px-5 py-4 text-xs font-bold text-zinc-500 dark:text-zinc-400 hover:bg-white/10 dark:hover:bg-black/30 rounded-2xl transition-all"
              >
-               {theme === 'light' ? <Moon className="mr-3 h-4 w-4" /> : <Sun className="mr-3 h-4 w-4" />}
+               {theme === 'light' ? <Moon className="mr-4 h-4.5 w-4.5" /> : <Sun className="mr-4 h-4.5 w-4.5" />}
                Toggle Theme
              </button>
-             <button onClick={handleLogout} className="w-full flex items-center px-4 py-3 text-xs font-bold text-zinc-400 hover:text-rose-500 rounded-xl transition-colors">
-               <LogOut className="mr-3 h-4 w-4" /> Sign Out
+             <button onClick={handleLogout} className="w-full flex items-center px-5 py-4 text-xs font-bold text-zinc-500 dark:text-zinc-400 hover:text-rose-500 rounded-2xl transition-colors">
+               <LogOut className="mr-4 h-4.5 w-4.5" /> Sign Out
              </button>
           </div>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto p-4 md:p-10 lg:p-14 print:p-0 bg-offwhite dark:bg-black transition-colors duration-300">
-        <div className="max-w-6xl mx-auto">{renderView()}</div>
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-auto p-4 md:p-8 lg:p-10 print:p-0 transition-colors duration-300 relative z-10">
+        <div className="max-w-6xl mx-auto h-full">{renderView()}</div>
       </main>
     </div>
   );
