@@ -149,7 +149,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[9px] md:text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2 ml-1 opacity-60">Legal Fullname</label>
+                      <label className="block text-[9px] md:text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2 ml-1 opacity-60">Legal Name</label>
                       <input required className="glass-input w-full p-5 rounded-2xl text-white text-sm font-bold outline-none" value={name} onChange={e => setName(e.target.value)} />
                     </div>
                     <div>
@@ -164,7 +164,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-[9px] md:text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2 ml-1 opacity-60">Email Address</label>
+                    <label className="block text-[9px] md:text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-2 ml-1 opacity-60">Email Protocol</label>
                     <div className="relative">
                       <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500" size={18} />
                       <input required type="email" className="glass-input w-full pl-14 pr-5 py-5 rounded-2xl text-white text-sm font-bold outline-none" value={email} onChange={e => setEmail(e.target.value)} />
@@ -191,7 +191,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 </div>
 
                 <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-6 rounded-3xl shadow-2xl shadow-blue-600/30 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center text-[10px] md:text-[11px] uppercase tracking-[0.2em] md:tracking-[0.3em] mt-4">
-                  {isRegistering ? 'Register' : 'Login'} <ArrowRight className="ml-3 w-5 h-5" />
+                  {isRegistering ? 'Register Lifecycle' : 'Access Vault'} <ArrowRight className="ml-3 w-5 h-5" />
                 </button>
               </form>
 
