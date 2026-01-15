@@ -186,7 +186,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
       id: `n_maint_${Date.now()}`,
       userId: selectedProperty.agentId,
       title: 'Maintenance Alert',
-      message: `A new issue has been reported at ${selectedProperty.name}. Priority: ${newTicket.priority}.`,
+      message: `A new repair request has been filed for ${selectedProperty.name}. Check Maintenance tab for details.`,
       type: newTicket.priority === TicketPriority.EMERGENCY ? NotificationType.ERROR : NotificationType.WARNING,
       timestamp: new Date().toISOString(),
       isRead: false,
@@ -364,8 +364,8 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                     {property.category}
                   </span>
                   {activeTickets.length > 0 && (
-                    <span className="px-4 py-2 rounded-2xl text-[9px] font-black uppercase border border-rose-500/30 bg-rose-500/20 backdrop-blur-md text-rose-500 shadow-xl flex items-center gap-2">
-                       <AlertTriangle size={12} /> {activeTickets.length} Active Repairs
+                    <span className="px-4 py-2 rounded-2xl text-[9px] font-black uppercase border border-rose-500/30 bg-rose-500/20 backdrop-blur-md text-rose-500 shadow-xl flex items-center gap-2 animate-pulse">
+                       <AlertTriangle size={12} /> {activeTickets.length} Faults Active
                     </span>
                   )}
                 </div>
@@ -515,7 +515,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                   <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
                     <div className="flex items-center justify-between">
                        <div className="flex items-center gap-4">
-                          <Wrench className="text-blue-600" size={32} />
+                          <Wrench className="text-blue-600 lucide-wrench" size={32} />
                           <div>
                              <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">Log Maintenance</h2>
                              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Report fault or damage</p>
@@ -728,7 +728,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                                           onClick={() => setShowMaintenanceForm(true)}
                                           className="flex-1 bg-white/10 text-zinc-900 dark:text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] border border-white/20 hover:bg-white/20 active:scale-95 transition-all flex items-center justify-center gap-3"
                                        >
-                                          <Wrench size={20} /> Maintenance Request
+                                          <Wrench size={20} className="lucide-wrench" /> Maintenance Request
                                        </button>
                                     )}
                                 </>

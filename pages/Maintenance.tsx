@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { User, UserRole, MaintenanceTicket, TicketStatus, TicketPriority, NotificationType } from '../types';
 import { getStore, saveStore } from '../store';
-// Added missing Building icon to lucide-react imports
 import { Plus, CheckCircle2, Clock, AlertCircle, Wrench, X, ChevronDown, Camera, Image as ImageIcon, Sparkles, Loader2, Maximize2, Building } from 'lucide-react';
 import { analyzeMaintenanceRequest } from '../services/geminiService';
 
@@ -61,8 +60,8 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
           notifications: [{
             id: `n_t_${Date.now()}`,
             userId: property?.agentId || 'u1', 
-            title: 'Maintenance Logged',
-            message: `A new repair request has been filed for ${property?.name || freshTicket.propertyId}.`,
+            title: 'Maintenance Request Logged',
+            message: `A new repair request has been filed for ${property?.name || freshTicket.propertyId}. Evidence attached.`,
             type: NotificationType.INFO,
             timestamp: new Date().toISOString(),
             isRead: false,
@@ -90,8 +89,8 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
         notifications: [{
             id: `n_ts_${Date.now()}`,
             userId: ticket.tenantId,
-            title: 'Ticket Status Updated',
-            message: `Request #${ticket.id} is now ${newStatus.replace('_', ' ')}.`,
+            title: 'Maintenance Status Updated',
+            message: `Your request #${ticket.id} is now ${newStatus.replace('_', ' ')}.`,
             type: NotificationType.INFO,
             timestamp: new Date().toISOString(),
             isRead: false
@@ -106,15 +105,15 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
     <div className="space-y-10 animate-in fade-in duration-500 pb-20">
       <header className="flex justify-between items-center px-1">
         <div>
-          <h1 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">Support Tickets</h1>
-          <p className="text-zinc-400 font-medium">Official infrastructure repair tracking.</p>
+          <h1 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">Maintenance Requests</h1>
+          <p className="text-zinc-400 font-medium">Infrastructure repair tracking and resolution portal.</p>
         </div>
         {user.role === UserRole.TENANT && (
           <button 
             onClick={() => setIsSubmitting(true)} 
-            className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center shadow-lg shadow-blue-600/20 transform active:scale-95 transition-all"
+            className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] flex items-center shadow-lg shadow-blue-600/20 active:scale-95 transition-all group"
           >
-            <Plus size={16} className="mr-2" /> Log Issue
+            <Plus size={16} className="mr-2 group-hover:rotate-90 transition-transform" /> Log Repair
           </button>
         )}
       </header>
@@ -122,7 +121,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
       {isSubmitting && (
         <div className="bg-white dark:bg-zinc-900 p-8 md:p-12 rounded-[3.5rem] border border-zinc-100 dark:border-white/10 shadow-2xl animate-in zoom-in-95">
           <div className="flex justify-between items-center mb-8">
-            <h3 className="font-black text-2xl text-zinc-900 dark:text-white">New Repair Request</h3>
+            <h3 className="font-black text-2xl text-zinc-900 dark:text-white">New Maintenance Log</h3>
             <button onClick={() => setIsSubmitting(false)} className="text-zinc-400 hover:text-rose-500 p-2">
               <X size={24} />
             </button>
@@ -133,14 +132,14 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Describe the fault</p>
                 <textarea 
                   className="w-full p-8 bg-offwhite dark:bg-black border-2 border-zinc-50 dark:border-zinc-800 rounded-[2.5rem] h-64 outline-none focus:ring-4 focus:ring-blue-600/10 text-lg font-bold text-zinc-900 dark:text-white resize-none" 
-                  placeholder="Tell us what's broken..." 
+                  placeholder="What needs fixing?" 
                   value={newIssue} 
                   onChange={e => setNewIssue(e.target.value)} 
                 />
              </div>
              
              <div className="space-y-6">
-                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Attach Evidence</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Evidence / Picture</p>
                 <div 
                   onClick={() => fileInputRef.current?.click()}
                   className="h-64 rounded-[2.5rem] bg-offwhite dark:bg-black border-2 border-dashed border-zinc-100 dark:border-zinc-800 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-blue-600/40 transition-all"
@@ -164,8 +163,8 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
               disabled={!newIssue || isAnalyzing} 
               className="flex-[2] bg-blue-600 text-white px-8 py-6 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
             >
-               {isAnalyzing ? <Loader2 className="animate-spin" size={20} /> : <Wrench size={20} />}
-               {isAnalyzing ? 'Analyzing Issue...' : 'Submit Maintenance Ticket'}
+               {isAnalyzing ? <Loader2 className="animate-spin" size={20} /> : <Wrench size={20} className="hover:rotate-45" />}
+               {isAnalyzing ? 'Analyzing Issue...' : 'Submit Maintenance Log'}
             </button>
             <button onClick={() => setIsSubmitting(false)} className="flex-1 text-zinc-400 font-black uppercase tracking-widest text-xs px-4 bg-offwhite dark:bg-zinc-800 rounded-[2rem] hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors">Discard</button>
           </div>

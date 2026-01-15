@@ -99,6 +99,46 @@
         100% { transform: translate(0, 0) rotate(360deg) scale(1); }
       }
 
+      /* Global Icon Interaction Engine */
+      svg {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      button:hover svg {
+        transform: scale(1.15);
+      }
+      button:active svg {
+        transform: scale(0.9);
+      }
+      
+      /* Specific Tool Animations */
+      button:hover .lucide-wrench {
+        transform: rotate(35deg) scale(1.2);
+      }
+      button:hover .lucide-bell {
+        animation: ring 0.5s ease-in-out infinite;
+      }
+      @keyframes ring {
+        0%, 100% { transform: rotate(0deg); }
+        25% { transform: rotate(15deg); }
+        75% { transform: rotate(-15deg); }
+      }
+      button:hover .lucide-arrow-right {
+        transform: translateX(5px);
+      }
+      button:hover .lucide-arrow-left {
+        transform: translateX(-5px);
+      }
+      button:hover .lucide-plus {
+        transform: rotate(90deg) scale(1.2);
+      }
+      button:hover .lucide-refresh-cw {
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
       .glass-card {
         background: var(--glass-bg);
         backdrop-filter: blur(20px);
