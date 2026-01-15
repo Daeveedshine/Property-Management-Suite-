@@ -14,7 +14,11 @@ import Applications from './pages/Applications';
 import Screenings from './pages/Screenings';
 import AdminApplications from './pages/AdminApplications';
 import Profile from './pages/Profile';
-import { Home, Building2, Wrench, CreditCard, LogOut, Menu, X, Shield, FileText, Bell, Table, Building, ClipboardCheck, UserPlus, User as UserIcon, Moon, Sun } from 'lucide-react';
+import { 
+  Home, Building2, Wrench, CreditCard, LogOut, Menu, X, Shield, 
+  FileText, Bell, Table, Building, ClipboardCheck, UserPlus, 
+  User as UserIcon, Moon, Sun, ChevronLeft, ChevronRight 
+} from 'lucide-react';
 
 export const Logo: React.FC<{ size?: number, className?: string }> = ({ size = 24, className = "" }) => (
   <svg 
@@ -71,6 +75,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<string>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
@@ -152,7 +157,7 @@ const App: React.FC = () => {
     { id: 'properties', label: 'Properties', icon: Building2, roles: [UserRole.AGENT, UserRole.ADMIN, UserRole.TENANT] },
     { id: 'applications', label: 'Apply Now', icon: UserPlus, roles: [UserRole.TENANT] },
     { id: 'screenings', label: 'Screenings', icon: ClipboardCheck, roles: [UserRole.AGENT, UserRole.ADMIN] },
-    { id: 'agreements', label: 'Agreements', icon: FileText, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
+    { id: 'agreements', label: 'Agreements (Soon)', icon: FileText, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
     { id: 'payments', label: 'Rent & Payments', icon: CreditCard, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
     { id: 'reports', label: 'Global Registry', icon: Table, roles: [UserRole.AGENT, UserRole.ADMIN] },
@@ -168,71 +173,117 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col md:flex-row h-screen text-zinc-900 dark:text-white transition-colors duration-300 overflow-hidden relative">
+      {/* Mobile Backdrop Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[55] md:hidden transition-opacity duration-300"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Mobile Header */}
-      <div className="md:hidden flex items-center justify-between glass-card p-4 shadow-sm shrink-0 z-50">
+      <div className="md:hidden flex items-center justify-between glass-card p-4 shadow-sm shrink-0 z-[60] border-b border-white/10">
         <div className="flex items-center gap-2">
            <Logo size={24} className="text-blue-600 dark:text-blue-400" />
-           <h1 className="font-semibold text-xl tracking-tighter">SPACEYA</h1>
+           <h1 className="font-bold text-lg tracking-tighter">SPACEYA</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button 
             onClick={toggleTheme}
-            className="p-2 rounded-xl bg-white/10 dark:bg-black/20 text-zinc-500 dark:text-zinc-400"
+            className="p-2.5 rounded-xl bg-white/10 dark:bg-black/20 text-zinc-500 dark:text-zinc-400 active:scale-95 transition-transform"
           >
             {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
           </button>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2">
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          <button 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+            className="p-2.5 rounded-xl bg-blue-600 text-white active:scale-95 transition-transform"
+          >
+            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
       </div>
 
-      {/* Sidebar - Liquid Glass Style */}
-      <aside className={`${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-50 w-72 glass-card text-zinc-900 dark:text-zinc-100 transition-transform md:translate-x-0 md:static md:inset-auto print:hidden flex flex-col m-4 rounded-[2.5rem] border-white/20 dark:border-white/5`}>
-        <div className="p-8 h-full flex flex-col">
-          <div className="hidden md:block mb-10 text-center">
-            <div className="inline-block bg-blue-600/10 dark:bg-blue-400/10 p-5 rounded-[1.8rem] mb-4 border border-blue-600/20">
-               <Logo size={44} className="text-blue-600 dark:text-blue-400" />
+      {/* Sidebar - Enhanced with Collapsible Desktop State */}
+      <aside className={`
+        ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
+        fixed inset-y-0 left-0 z-[100] w-[85%] sm:w-72 md:w-auto glass-card text-zinc-900 dark:text-zinc-100 transition-all duration-300 ease-out 
+        md:translate-x-0 md:static md:inset-auto print:hidden flex flex-col shrink-0
+        border-r border-white/20 dark:border-white/5 
+        bg-white/90 dark:bg-zinc-950/95 md:bg-inherit
+        ${!isSidebarCollapsed ? 'md:w-72' : 'md:w-24'}
+      `}>
+        <div className={`p-6 md:p-8 h-full flex flex-col ${isSidebarCollapsed ? 'items-center' : ''}`}>
+          <div className={`mb-8 md:mb-10 ${isSidebarCollapsed ? 'text-center' : ''}`}>
+            <div className={`inline-block bg-blue-600/10 dark:bg-blue-400/10 p-4 rounded-[1.5rem] border border-blue-600/20 transition-all ${isSidebarCollapsed ? 'p-3' : 'md:p-5'}`}>
+               <Logo size={isSidebarCollapsed ? 28 : 36} className="text-blue-600 dark:text-blue-400" />
             </div>
-            <h1 className="text-2xl font-semibold tracking-tighter text-zinc-900 dark:text-white">SPACEYA</h1>
-            <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase mt-1 tracking-[0.3em] font-black opacity-60">Property Manager</p>
+            {!isSidebarCollapsed && (
+              <div className="mt-4">
+                <h1 className="text-xl md:text-2xl font-bold tracking-tighter text-zinc-900 dark:text-white truncate">SPACEYA</h1>
+                <p className="text-[9px] md:text-[10px] text-zinc-500 dark:text-zinc-400 uppercase mt-1 tracking-[0.3em] font-black opacity-60">Property Manager</p>
+              </div>
+            )}
           </div>
 
-          <nav className="space-y-1.5 flex-1 overflow-y-auto custom-scrollbar px-1">
+          <nav className="space-y-1 flex-1 overflow-y-auto custom-scrollbar pr-1">
             {navItems.filter(item => item.roles.includes(user?.role || UserRole.TENANT)).map(item => (
               <button
                 key={item.id}
+                title={isSidebarCollapsed ? item.label : ''}
                 onClick={() => { setView(item.id); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center px-5 py-4 text-xs font-bold rounded-2xl transition-all relative ${view === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20 scale-[1.02]' : 'text-zinc-500 dark:text-zinc-400 hover:bg-white/10 dark:hover:bg-black/30 hover:text-blue-600 dark:hover:text-blue-400'}`}
+                className={`
+                  w-full flex items-center font-bold rounded-2xl transition-all relative group
+                  ${isSidebarCollapsed ? 'justify-center p-3.5 md:p-4 mb-2' : 'px-4 py-3.5 md:px-5 md:py-4 text-[13px] md:text-xs'}
+                  ${view === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-600/20 scale-[1.02]' : 'text-zinc-500 dark:text-zinc-400 hover:bg-white/10 dark:hover:bg-black/30 hover:text-blue-600 dark:hover:text-blue-400'}
+                `}
               >
-                <item.icon className={`mr-4 h-4.5 w-4.5 ${view === item.id ? 'text-white' : 'text-zinc-400 group-hover:text-blue-600'}`} /> {item.label}
-                {item.badge ? (
+                <item.icon className={`${isSidebarCollapsed ? '' : 'mr-4'} h-5 w-5 shrink-0 ${view === item.id ? 'text-white' : 'text-zinc-400 group-hover:text-blue-600'}`} /> 
+                {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
+                
+                {item.badge && !isSidebarCollapsed ? (
                   <span className="ml-auto bg-blue-600 dark:bg-blue-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black border border-white/20">
                     {item.badge}
                   </span>
+                ) : item.badge && isSidebarCollapsed ? (
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-blue-600 rounded-full border border-white dark:border-zinc-900"></span>
                 ) : null}
               </button>
             ))}
           </nav>
 
-          <div className="pt-6 border-t border-zinc-200 dark:border-white/10 mt-6 space-y-2">
+          <div className={`pt-6 border-t border-zinc-200 dark:border-white/10 mt-6 space-y-2 shrink-0 ${isSidebarCollapsed ? 'flex flex-col items-center' : ''}`}>
              <button 
                onClick={toggleTheme}
-               className="w-full flex items-center px-5 py-4 text-xs font-bold text-zinc-500 dark:text-zinc-400 hover:bg-white/10 dark:hover:bg-black/30 rounded-2xl transition-all"
+               title={isSidebarCollapsed ? "Toggle Theme" : ""}
+               className={`w-full flex items-center font-bold text-zinc-500 dark:text-zinc-400 hover:bg-white/10 dark:hover:bg-black/30 rounded-2xl transition-all ${isSidebarCollapsed ? 'justify-center p-3.5' : 'px-5 py-3.5 text-xs'}`}
              >
-               {theme === 'light' ? <Moon className="mr-4 h-4.5 w-4.5" /> : <Sun className="mr-4 h-4.5 w-4.5" />}
-               Toggle Theme
+               {theme === 'light' ? <Moon className={`${isSidebarCollapsed ? '' : 'mr-4'} h-5 w-5`} /> : <Sun className={`${isSidebarCollapsed ? '' : 'mr-4'} h-5 w-5`} />}
+               {!isSidebarCollapsed && "Toggle Theme"}
              </button>
-             <button onClick={handleLogout} className="w-full flex items-center px-5 py-4 text-xs font-bold text-zinc-500 dark:text-zinc-400 hover:text-rose-500 rounded-2xl transition-colors">
-               <LogOut className="mr-4 h-4.5 w-4.5" /> Sign Out
+             
+             <button 
+               onClick={handleLogout} 
+               title={isSidebarCollapsed ? "Sign Out" : ""}
+               className={`w-full flex items-center font-bold text-zinc-500 dark:text-zinc-400 hover:text-rose-500 rounded-2xl transition-colors ${isSidebarCollapsed ? 'justify-center p-3.5' : 'px-5 py-3.5 text-xs'}`}
+             >
+               <LogOut className={`${isSidebarCollapsed ? '' : 'mr-4'} h-5 w-5`} /> 
+               {!isSidebarCollapsed && "Sign Out"}
+             </button>
+
+             {/* Desktop Collapse Toggle */}
+             <button 
+               onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+               className="hidden md:flex w-full items-center justify-center p-3.5 text-zinc-400 hover:text-blue-600 hover:bg-white/10 rounded-2xl transition-all"
+             >
+               {isSidebarCollapsed ? <ChevronRight size={20} /> : <div className="flex items-center gap-2"><ChevronLeft size={20} /><span className="text-[10px] uppercase font-black tracking-widest">Collapse Menu</span></div>}
              </button>
           </div>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-auto p-4 md:p-8 lg:p-10 print:p-0 transition-colors duration-300 relative z-10">
-        <div className="max-w-6xl mx-auto h-full">{renderView()}</div>
+      <main className="flex-1 overflow-auto p-4 md:p-8 lg:p-10 print:p-0 transition-all duration-300 relative z-10 bg-offwhite dark:bg-transparent">
+        <div className="max-w-7xl mx-auto h-full">{renderView()}</div>
       </main>
     </div>
   );

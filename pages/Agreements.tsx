@@ -1,101 +1,53 @@
-
-import React, { useState } from 'react';
-import { User, UserRole, Agreement } from '../types';
-import { getStore, saveStore } from '../store';
-import { FileText, Upload, ExternalLink, Loader2, CheckCircle, Clock } from 'lucide-react';
+import React from 'react';
+import { User } from '../types';
+import { FileText, Sparkles, ShieldCheck, PenTool, Lock } from 'lucide-react';
 
 interface AgreementsProps {
   user: User;
 }
 
 const Agreements: React.FC<AgreementsProps> = ({ user }) => {
-  const store = getStore();
-  const [agreements, setAgreements] = useState<Agreement[]>(
-    user.role === UserRole.AGENT || user.role === UserRole.ADMIN
-      ? store.agreements
-      : store.agreements.filter(a => a.tenantId === user.id)
-  );
-  
-  const [uploadingId, setUploadingId] = useState<string | null>(null);
-
-  const simulateUpload = (id: string) => {
-    setUploadingId(id);
-    setTimeout(() => {
-      const updatedAgreements = store.agreements.map(a => 
-        a.id === id ? { ...a, documentUrl: `https://storage.googleapis.com/prop-lifecycle/agreements/${id}.pdf` } : a
-      );
-      const newState = { ...store, agreements: updatedAgreements };
-      saveStore(newState);
-      setAgreements(user.role === UserRole.TENANT ? updatedAgreements.filter(a => a.tenantId === user.id) : updatedAgreements);
-      setUploadingId(null);
-    }, 1500);
-  };
-
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">Lease Agreements</h1>
-        <p className="text-slate-500">View and manage legal documents and lease terms.</p>
+    <div className="h-full flex flex-col items-center justify-center space-y-12 animate-in fade-in zoom-in-95 duration-700 pb-20">
+      <div className="relative">
+        <div className="absolute inset-0 bg-blue-600 blur-[100px] opacity-20 animate-pulse-gentle"></div>
+        <div className="relative bg-white dark:bg-zinc-900 p-10 md:p-14 rounded-[4rem] border border-zinc-100 dark:border-zinc-800 shadow-2xl">
+          <div className="bg-blue-600/10 p-6 rounded-[2.5rem] w-fit mx-auto mb-10 border border-blue-600/20">
+            <FileText size={64} className="text-blue-600" />
+          </div>
+          
+          <div className="text-center space-y-4">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-amber-500/10 text-amber-500 rounded-full text-[10px] font-black uppercase tracking-[0.2em] border border-amber-500/20 mb-4">
+              <Sparkles size={12} /> Feature Development
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black text-zinc-900 dark:text-white tracking-tighter">Legal Core Coming Soon</h1>
+            <p className="text-zinc-500 dark:text-zinc-400 font-medium max-w-md mx-auto leading-relaxed">
+              We are finalizing the security protocols for our digital lease engine. Soon, you'll be able to generate, sign, and store legally binding agreements directly in the suite.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16">
+            <FeaturePreview icon={PenTool} label="Digital Signatures" />
+            <FeaturePreview icon={ShieldCheck} label="Smart Contracts" />
+            <FeaturePreview icon={Lock} label="Encrypted Vault" />
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {agreements.length > 0 ? agreements.map(agreement => (
-          <div key={agreement.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col md:flex-row">
-            <div className="p-6 flex-1">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-                  <FileText className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-800 text-lg">Residential Lease Agreement v{agreement.version}</h3>
-                  <div className="flex items-center text-xs text-slate-500 space-x-2">
-                    <span className="flex items-center"><Clock className="w-3 h-3 mr-1" /> {agreement.startDate} to {agreement.endDate}</span>
-                    <span>•</span>
-                    <span className={`uppercase font-bold ${agreement.status === 'active' ? 'text-emerald-600' : 'text-slate-400'}`}>{agreement.status}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-slate-50/50 p-6 border-t md:border-t-0 md:border-l border-slate-100 flex flex-col justify-center items-center space-y-3 min-w-[200px]">
-              {agreement.documentUrl ? (
-                <a 
-                  href={agreement.documentUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="w-full bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl flex items-center justify-center font-bold text-sm hover:bg-slate-50 transition-colors shadow-sm"
-                >
-                  <ExternalLink className="w-4 h-4 mr-2" /> View Document
-                </a>
-              ) : (
-                user.role === UserRole.AGENT && (
-                  <button 
-                    onClick={() => simulateUpload(agreement.id)}
-                    disabled={uploadingId === agreement.id}
-                    className="w-full bg-indigo-600 text-white px-4 py-2.5 rounded-xl flex items-center justify-center font-bold text-sm hover:bg-indigo-700 transition-colors shadow-lg disabled:opacity-50"
-                  >
-                    {uploadingId === agreement.id ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Upload className="w-4 h-4 mr-2" />}
-                    {uploadingId === agreement.id ? 'Uploading...' : 'Upload Signed PDF'}
-                  </button>
-                )
-              )}
-              {agreement.documentUrl && (
-                <div className="flex items-center text-[10px] text-emerald-600 font-bold uppercase tracking-wider">
-                  <CheckCircle className="w-3 h-3 mr-1" /> Signed & Verified
-                </div>
-              )}
-            </div>
-          </div>
-        )) : (
-          <div className="text-center py-20 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
-            <FileText className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-slate-600">No agreements found</h3>
-            <p className="text-slate-400">Lease documents will appear here once generated.</p>
-          </div>
-        )}
+      <div className="text-center">
+        <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.4em]">Proprietary Technology v2.0</p>
       </div>
     </div>
   );
 };
+
+const FeaturePreview = ({ icon: Icon, label }: { icon: any, label: string }) => (
+  <div className="p-6 bg-offwhite dark:bg-black/40 rounded-3xl border border-zinc-50 dark:border-zinc-800 flex flex-col items-center gap-3 group transition-all hover:border-blue-600/30">
+    <div className="p-3 bg-white dark:bg-zinc-800 rounded-2xl text-zinc-400 group-hover:text-blue-600 transition-colors shadow-sm">
+      <Icon size={20} />
+    </div>
+    <span className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">{label}</span>
+  </div>
+);
 
 export default Agreements;

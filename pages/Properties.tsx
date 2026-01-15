@@ -1,15 +1,20 @@
-import React, { useState, useMemo } from 'react';
-import { User, UserRole, Property, PropertyStatus, PropertyCategory, PropertyType } from '../types';
+import React, { useState, useMemo, useRef } from 'react';
+import { User, UserRole, Property, PropertyStatus, PropertyCategory, PropertyType, ApplicationStatus, Agreement, NotificationType, MaintenanceTicket, TicketStatus, TicketPriority } from '../types';
 import { getStore, saveStore } from '../store';
 import { 
   MapPin, Plus, Edit, X, Wrench, Info, ArrowRight, DollarSign, 
   UserPlus, Save, Loader2, Tag, Layout, Briefcase, UserCheck, 
-  Maximize2, Users, CalendarDays, Clock, FileText 
+  Maximize2, Users, CalendarDays, Clock, FileText, ChevronDown,
+  ArrowUpNarrowWide, ArrowDownWideNarrow, CalendarRange, ListFilter,
+  Search, CheckCircle2, ClipboardCheck, Building, Camera, Image as ImageIcon, AlertTriangle
 } from 'lucide-react';
+import { analyzeMaintenanceRequest } from '../services/geminiService';
 
 interface PropertiesProps {
   user: User;
 }
+
+type SortOption = 'none' | 'rent_asc' | 'rent_desc' | 'location' | 'expiry';
 
 const PROPERTY_TYPES: PropertyType[] = [
   'Single Room', 'Self-contained', 'Mini Flat (1 Bedroom)', 
@@ -24,29 +29,183 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
   const [store, setStore] = useState(getStore());
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showTenantPicker, setShowTenantPicker] = useState(false);
+  const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
+  const [tenantSearch, setTenantSearch] = useState('');
   const [editFormData, setEditFormData] = useState<Partial<Property>>({});
+  const [maintenanceIssue, setMaintenanceIssue] = useState('');
+  const [maintenanceImage, setMaintenanceImage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortOption>('none');
+  const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   
-  const properties = useMemo(() => {
-    if (user.role === UserRole.ADMIN) return store.properties;
-    if (user.role === UserRole.AGENT) {
-      return store.properties.filter(p => p.agentId === user.id);
-    }
-    return store.properties.filter(p => p.id === user.assignedPropertyId);
-  }, [user, store]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const eligibleTenants = useMemo(() => {
+  const properties = useMemo(() => {
+    let list: Property[] = [];
     if (user.role === UserRole.ADMIN) {
-      return store.users.filter(u => u.role === UserRole.TENANT);
+      list = [...store.properties];
+    } else if (user.role === UserRole.AGENT) {
+      list = [...store.properties.filter(p => p.agentId === user.id)];
+    } else {
+      list = [...store.properties.filter(p => p.id === user.assignedPropertyId)];
     }
-    const applicationsForMe = store.applications.filter(app => 
-      app.agentIdCode.toLowerCase() === user.id.toLowerCase() ||
-      app.agentId.toLowerCase() === user.id.toLowerCase()
-    );
-    const tenantIds = Array.from(new Set(applicationsForMe.map(app => app.userId)));
-    return store.users.filter(u => u.role === UserRole.TENANT && tenantIds.includes(u.id));
-  }, [store.applications, store.users, user.id, user.role]);
+
+    switch (sortBy) {
+      case 'rent_asc': list.sort((a, b) => a.rent - b.rent); break;
+      case 'rent_desc': list.sort((a, b) => b.rent - a.rent); break;
+      case 'location': list.sort((a, b) => a.location.localeCompare(b.location)); break;
+      case 'expiry':
+        list.sort((a, b) => {
+          if (!a.rentExpiryDate) return 1;
+          if (!b.rentExpiryDate) return -1;
+          return new Date(a.rentExpiryDate).getTime() - new Date(b.rentExpiryDate).getTime();
+        });
+        break;
+      default: break;
+    }
+    return list;
+  }, [user, store, sortBy]);
+
+  const approvedTenants = useMemo(() => {
+    const approvedAppUserIds = store.applications
+      .filter(app => app.status === ApplicationStatus.APPROVED && (user.role === UserRole.ADMIN || app.agentId === user.id))
+      .map(app => app.userId);
+    
+    return store.users
+      .filter(u => u.role === UserRole.TENANT && approvedAppUserIds.includes(u.id))
+      .filter(u => !u.assignedPropertyId)
+      .filter(u => 
+        u.name.toLowerCase().includes(tenantSearch.toLowerCase()) || 
+        u.email.toLowerCase().includes(tenantSearch.toLowerCase())
+      );
+  }, [store.applications, store.users, user.id, user.role, tenantSearch]);
+
+  const handleAssignTenant = (tenant: User) => {
+    if (!selectedProperty) return;
+    setIsSaving(true);
+
+    setTimeout(() => {
+      const today = new Date();
+      const nextYear = new Date();
+      nextYear.setFullYear(today.getFullYear() + 1);
+      nextYear.setDate(today.getDate() - 1);
+
+      const startDate = today.toISOString().split('T')[0];
+      const endDate = nextYear.toISOString().split('T')[0];
+
+      const updatedProperties = store.properties.map(p => 
+        p.id === selectedProperty.id ? { 
+          ...p, 
+          tenantId: tenant.id, 
+          status: PropertyStatus.OCCUPIED,
+          rentStartDate: startDate,
+          rentExpiryDate: endDate
+        } : p
+      );
+
+      const updatedUsers = store.users.map(u => 
+        u.id === tenant.id ? { ...u, assignedPropertyId: selectedProperty.id } : u
+      );
+
+      const updatedApplications = store.applications.map(app => 
+        (app.userId === tenant.id && app.status === ApplicationStatus.APPROVED)
+          ? { ...app, propertyId: selectedProperty.id }
+          : app
+      );
+
+      const newAgreement: Agreement = {
+        id: `a${Date.now()}`,
+        propertyId: selectedProperty.id,
+        tenantId: tenant.id,
+        version: 1,
+        startDate,
+        endDate,
+        status: 'active'
+      };
+
+      const notification = {
+        id: `n_assign_${Date.now()}`,
+        userId: tenant.id,
+        title: 'Lease Activated',
+        message: `Your application for ${selectedProperty.name} is complete. Your tenancy cycle starts today.`,
+        type: NotificationType.SUCCESS,
+        timestamp: new Date().toISOString(),
+        isRead: false,
+        linkTo: 'dashboard'
+      };
+
+      const updatedStore = { 
+        ...store, 
+        properties: updatedProperties, 
+        users: updatedUsers,
+        applications: updatedApplications,
+        agreements: [...store.agreements, newAgreement],
+        notifications: [notification, ...store.notifications]
+      };
+
+      saveStore(updatedStore);
+      setStore(updatedStore);
+      setSelectedProperty(updatedProperties.find(p => p.id === selectedProperty.id) || null);
+      setIsSaving(false);
+      setShowTenantPicker(false);
+      setTenantSearch('');
+    }, 1200);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setMaintenanceImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSubmitMaintenance = async () => {
+    if (!selectedProperty || !maintenanceIssue) return;
+    setIsSaving(true);
+
+    const aiRes = await analyzeMaintenanceRequest(maintenanceIssue);
+
+    const newTicket: MaintenanceTicket = {
+      id: `t${Date.now()}`,
+      propertyId: selectedProperty.id,
+      tenantId: user.id,
+      issue: maintenanceIssue,
+      status: TicketStatus.OPEN,
+      priority: (aiRes.priority as TicketPriority) || TicketPriority.MEDIUM,
+      createdAt: new Date().toISOString(),
+      imageUrl: maintenanceImage || undefined,
+      aiAssessment: aiRes.assessment
+    };
+
+    const notification = {
+      id: `n_maint_${Date.now()}`,
+      userId: selectedProperty.agentId,
+      title: 'Maintenance Alert',
+      message: `A new issue has been reported at ${selectedProperty.name}. Priority: ${newTicket.priority}.`,
+      type: newTicket.priority === TicketPriority.EMERGENCY ? NotificationType.ERROR : NotificationType.WARNING,
+      timestamp: new Date().toISOString(),
+      isRead: false,
+      linkTo: 'maintenance'
+    };
+
+    const updatedStore = {
+      ...store,
+      tickets: [newTicket, ...store.tickets],
+      notifications: [notification, ...store.notifications]
+    };
+
+    saveStore(updatedStore);
+    setStore(updatedStore);
+    setIsSaving(false);
+    setShowMaintenanceForm(false);
+    setMaintenanceIssue('');
+    setMaintenanceImage(null);
+  };
 
   const getStatusStyle = (status: PropertyStatus) => {
     switch (status) {
@@ -61,6 +220,8 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     setSelectedProperty(property);
     setEditFormData(property);
     setIsEditing(false);
+    setShowTenantPicker(false);
+    setShowMaintenanceForm(false);
   };
 
   const handleStartEdit = (e: React.MouseEvent, property: Property) => {
@@ -68,6 +229,8 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     setSelectedProperty(property);
     setEditFormData(property);
     setIsEditing(true);
+    setShowTenantPicker(false);
+    setShowMaintenanceForm(false);
   };
 
   const calculateExpiryDate = (startDate: string) => {
@@ -87,12 +250,10 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
   const handleSave = () => {
     if (!selectedProperty) return;
     setIsSaving(true);
-    
     setTimeout(() => {
       const updatedProperties = store.properties.map(p => 
         p.id === selectedProperty.id ? { ...p, ...editFormData } as Property : p
       );
-      
       const updatedStore = { ...store, properties: updatedProperties };
       saveStore(updatedStore);
       setStore(updatedStore);
@@ -122,33 +283,73 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
       setIsEditing(true);
   };
 
+  const sortOptions = [
+    { id: 'none', label: 'Default Order', icon: ListFilter },
+    { id: 'rent_asc', label: 'Rent: Low to High', icon: ArrowUpNarrowWide },
+    { id: 'rent_desc', label: 'Rent: High to Low', icon: ArrowDownWideNarrow },
+    { id: 'location', label: 'By Location (A-Z)', icon: MapPin },
+    { id: 'expiry', label: 'By Expiry Month', icon: CalendarRange },
+  ];
+
   return (
-    <div className="space-y-12 animate-in fade-in duration-500 pb-20">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+    <div className="space-y-8 md:space-y-12 animate-in fade-in duration-500 pb-20">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
-          <h1 className="text-5xl font-black text-zinc-900 dark:text-white tracking-tighter">Inventory</h1>
+          <h1 className="text-4xl md:text-5xl font-black text-zinc-900 dark:text-white tracking-tighter">Inventory</h1>
           <p className="text-zinc-500 font-bold uppercase tracking-[0.2em] text-[10px] mt-2 opacity-60">Asset Registry</p>
         </div>
-        {(user.role === UserRole.AGENT || user.role === UserRole.ADMIN) && (
-          <button 
-            onClick={handlePublishNew}
-            className="w-full sm:w-auto bg-blue-600 text-white px-10 py-5 rounded-[1.8rem] flex items-center justify-center shadow-2xl shadow-blue-600/20 font-black uppercase tracking-widest text-[10px] active:scale-95 transition-all hover:bg-blue-700"
-          >
-            <Plus className="w-4 h-4 mr-3" /> Publish Asset
-          </button>
-        )}
+        
+        <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
+          <div className="relative">
+            <button 
+              onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
+              className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-white/10 border border-white/20 dark:border-white/5 backdrop-blur-md flex items-center justify-between gap-4 font-bold text-[11px] uppercase tracking-widest text-zinc-600 dark:text-zinc-300 hover:bg-white/20 transition-all active:scale-95 shadow-xl"
+            >
+              <div className="flex items-center gap-3">
+                {React.createElement(sortOptions.find(o => o.id === sortBy)?.icon || ListFilter, { size: 16, className: "text-blue-600" })}
+                <span>{sortOptions.find(o => o.id === sortBy)?.label}</span>
+              </div>
+              <ChevronDown size={14} className={`transition-transform duration-300 ${isSortMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isSortMenuOpen && (
+              <div className="absolute top-full left-0 right-0 sm:right-auto sm:min-w-[240px] mt-2 z-50 glass-card rounded-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 slide-in-from-top-2">
+                {sortOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    onClick={() => { setSortBy(opt.id as SortOption); setIsSortMenuOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-5 py-4 text-[10px] font-black uppercase tracking-widest transition-colors ${sortBy === opt.id ? 'bg-blue-600 text-white' : 'text-zinc-500 hover:bg-white/10 dark:hover:bg-black/40 hover:text-blue-600 dark:hover:text-blue-400'}`}
+                  >
+                    <opt.icon size={16} />
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {(user.role === UserRole.AGENT || user.role === UserRole.ADMIN) && (
+            <button 
+              onClick={handlePublishNew}
+              className="w-full sm:w-auto bg-blue-600 text-white px-8 py-4 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-600/20 font-black uppercase tracking-widest text-[10px] active:scale-95 transition-all hover:bg-blue-700"
+            >
+              <Plus className="w-4 h-4 mr-3" /> Publish Asset
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
         {properties.map(property => {
           const propertyAgent = store.users.find(u => u.id === property.agentId);
+          const activeTickets = store.tickets.filter(t => t.propertyId === property.id && t.status !== TicketStatus.RESOLVED);
+          
           return (
             <div 
               key={property.id} 
               onClick={() => handleOpenDetail(property)}
               className="glass-card rounded-[3.2rem] overflow-hidden group hover:scale-[1.01] transition-all duration-700 cursor-pointer flex flex-col md:flex-row shadow-2xl border-white/20 dark:border-white/5"
             >
-              {/* Media Part */}
               <div className="w-full md:w-5/12 h-80 md:h-auto bg-offwhite dark:bg-black relative overflow-hidden shrink-0">
                 <img 
                   src={`https://picsum.photos/seed/${property.id}/600/800`} 
@@ -162,10 +363,14 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                   <span className="px-4 py-2 rounded-2xl text-[9px] font-black uppercase border border-white/20 bg-white/30 backdrop-blur-md text-zinc-900 dark:text-white shadow-xl">
                     {property.category}
                   </span>
+                  {activeTickets.length > 0 && (
+                    <span className="px-4 py-2 rounded-2xl text-[9px] font-black uppercase border border-rose-500/30 bg-rose-500/20 backdrop-blur-md text-rose-500 shadow-xl flex items-center gap-2">
+                       <AlertTriangle size={12} /> {activeTickets.length} Active Repairs
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* Data Part */}
               <div className="p-10 flex-1 flex flex-col justify-between space-y-8">
                 <div>
                   <div className="flex justify-between items-start mb-4">
@@ -235,10 +440,9 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
         })}
       </div>
 
-      {/* Asset Inspector Modal */}
       {selectedProperty && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-3xl animate-in fade-in duration-500">
-          <div className="glass-card w-full max-w-6xl md:rounded-[3.5rem] shadow-[0_32px_128px_rgba(0,0,0,0.5)] border-white/20 dark:border-white/5 overflow-hidden flex flex-col md:flex-row h-full md:h-auto md:max-h-[92vh]">
+          <div className="glass-card w-full max-w-6xl md:rounded-[3.5rem] shadow-[0_32px_128px_rgba(0,0,0,0.5)] border-white/20 dark:border-white/5 overflow-hidden flex flex-col md:flex-row h-full md:h-auto md:max-h-[92vh] relative">
              
              <div 
                className="w-full md:w-5/12 h-72 md:h-auto relative group cursor-pointer shrink-0"
@@ -260,117 +464,279 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
              </div>
 
              <div className="flex-1 p-8 md:p-14 overflow-y-auto custom-scrollbar scroll-smooth">
-                <div className="flex justify-between items-start mb-12">
-                  <div className="space-y-4 flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-3">
-                        <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase shadow-lg border backdrop-blur-md ${getStatusStyle(selectedProperty.status)}`}>{selectedProperty.status}</span>
-                        <span className="bg-white/10 border border-white/20 text-zinc-700 dark:text-zinc-300 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase">{selectedProperty.category}</span>
-                    </div>
-                    {isEditing ? (
-                        <input 
-                            className="glass-input text-3xl font-black text-zinc-900 dark:text-white tracking-tighter p-4 rounded-2xl w-full outline-none" 
-                            value={editFormData.name} 
-                            onChange={e => setEditFormData({...editFormData, name: e.target.value})}
-                        />
-                    ) : (
-                        <h2 className="text-4xl md:text-5xl font-black text-zinc-900 dark:text-white tracking-tighter leading-tight">{selectedProperty.name}</h2>
-                    )}
-                  </div>
-                  <div className="flex gap-4 ml-6">
-                    {(user.role === UserRole.AGENT || user.role === UserRole.ADMIN) && !isEditing && (
-                        <button 
-                            onClick={() => setIsEditing(true)}
-                            className="p-4 glass-input rounded-full text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all"
-                        >
-                            <Edit size={20} />
-                        </button>
-                    )}
-                    <button onClick={() => setSelectedProperty(null)} className="p-4 glass-input rounded-full text-zinc-500 hover:text-rose-500 transition-all hidden md:block">
-                        <X size={20} />
-                    </button>
-                  </div>
-                </div>
-                
-                <div className="space-y-12">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                        {isEditing ? (
-                            <>
-                                <InputWrapper label="Location">
-                                    <input className="glass-input w-full p-4 rounded-xl text-sm font-bold" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} />
-                                </InputWrapper>
-                                <InputWrapper label="Annual Rent (₦)">
-                                    <input type="number" className="glass-input w-full p-4 rounded-xl text-sm font-bold" value={editFormData.rent} onChange={e => setEditFormData({...editFormData, rent: parseInt(e.target.value) || 0})} />
-                                </InputWrapper>
-                                <InputWrapper label="Status">
-                                    <select className="glass-input w-full p-4 rounded-xl text-sm font-bold appearance-none" value={editFormData.status} onChange={e => setEditFormData({...editFormData, status: e.target.value as PropertyStatus})}>
-                                        <option value={PropertyStatus.DRAFT}>DRAFT</option>
-                                        <option value={PropertyStatus.LISTED}>LISTED</option>
-                                        <option value={PropertyStatus.VACANT}>VACANT</option>
-                                        <option value={PropertyStatus.OCCUPIED}>OCCUPIED</option>
-                                        <option value={PropertyStatus.ARCHIVED}>ARCHIVED</option>
-                                    </select>
-                                </InputWrapper>
-                                <InputWrapper label="Lifecycle Start">
-                                    <input type="date" className="glass-input w-full p-4 rounded-xl text-sm font-bold" value={editFormData.rentStartDate || ''} onChange={handleStartDateChange} />
-                                </InputWrapper>
-                            </>
-                        ) : (
-                            <>
-                                <DetailCard icon={MapPin} label="Location" value={selectedProperty.location} />
-                                <DetailCard icon={DollarSign} label="Annual Yield" value={`₦${selectedProperty.rent.toLocaleString()}`} />
-                                <DetailCard icon={Layout} label="Type" value={selectedProperty.type} />
-                                {selectedProperty.rentStartDate && <DetailCard icon={CalendarDays} label="Start" value={selectedProperty.rentStartDate} />}
-                            </>
-                        )}
+                {showTenantPicker ? (
+                   <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500 h-full flex flex-col">
+                      <div className="flex items-center justify-between">
+                         <div className="flex items-center gap-4">
+                            <UserPlus className="text-blue-600" size={32} />
+                            <div>
+                               <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">Onboard Tenant</h2>
+                               <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Only approved candidates listed</p>
+                            </div>
+                         </div>
+                         <button onClick={() => setShowTenantPicker(false)} className="p-4 bg-white/5 rounded-full text-zinc-400 hover:text-rose-500 transition-all">
+                            <X size={20} />
+                         </button>
+                      </div>
+
+                      <div className="relative">
+                         <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-zinc-500" size={20} />
+                         <input 
+                            className="glass-input w-full pl-14 pr-6 py-5 rounded-3xl text-zinc-900 dark:text-white font-bold outline-none" 
+                            placeholder="Search by name or email..." 
+                            value={tenantSearch}
+                            onChange={e => setTenantSearch(e.target.value)}
+                         />
+                      </div>
+
+                      <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar min-h-[300px]">
+                         {approvedTenants.map(tenant => (
+                            <div key={tenant.id} className="p-6 bg-white/5 border border-white/10 rounded-[2rem] flex items-center justify-between hover:border-blue-600 transition-all group shadow-sm">
+                               <div className="flex items-center gap-4">
+                                  <div className="w-12 h-12 rounded-2xl bg-blue-600/10 flex items-center justify-center text-blue-600 font-black">
+                                     {tenant.name.charAt(0)}
+                                  </div>
+                                  <div>
+                                     <p className="font-black text-zinc-900 dark:text-white tracking-tight">{tenant.name}</p>
+                                     <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{tenant.email}</p>
+                                  </div>
+                               </div>
+                               <button 
+                                  onClick={() => handleAssignTenant(tenant)}
+                                  className="px-6 py-3 bg-blue-600 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-blue-700 active:scale-95 transition-all flex items-center gap-2 shadow-lg shadow-blue-600/20"
+                               >
+                                  <UserCheck size={14} /> Assign Placement
+                               </button>
+                            </div>
+                         ))}
+                      </div>
+                   </div>
+                ) : showMaintenanceForm ? (
+                  <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-4">
+                          <Wrench className="text-blue-600" size={32} />
+                          <div>
+                             <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">Log Maintenance</h2>
+                             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Report fault or damage</p>
+                          </div>
+                       </div>
+                       <button onClick={() => setShowMaintenanceForm(false)} className="p-4 bg-white/5 rounded-full text-zinc-400 hover:text-rose-500 transition-all">
+                          <X size={20} />
+                       </button>
                     </div>
 
-                    <div className="space-y-4">
-                        <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
-                            <Info size={14} className="text-blue-600" /> Executive Summary
-                        </p>
+                    <div className="space-y-8">
+                       <div className="space-y-4">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Fault Description</label>
+                          <textarea 
+                             className="glass-input w-full p-8 rounded-[2.5rem] h-44 outline-none focus:ring-4 focus:ring-blue-600/10 text-lg font-bold text-zinc-900 dark:text-white resize-none" 
+                             placeholder="Describe the issue in detail..." 
+                             value={maintenanceIssue} 
+                             onChange={e => setMaintenanceIssue(e.target.value)}
+                          />
+                       </div>
+
+                       <div className="space-y-4">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Evidence / Picture</label>
+                          <div 
+                             onClick={() => fileInputRef.current?.click()}
+                             className="h-64 rounded-[3rem] bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-blue-600/40 transition-all"
+                          >
+                             {maintenanceImage ? (
+                                <img src={maintenanceImage} className="w-full h-full object-cover" alt="Preview" />
+                             ) : (
+                                <div className="text-center group-hover:scale-110 transition-transform">
+                                   <Camera size={48} className="text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
+                                   <p className="text-[10px] font-black uppercase text-zinc-400">Snap or Upload Photo</p>
+                                </div>
+                             )}
+                          </div>
+                          <input type="file" hidden ref={fileInputRef} accept="image/*" onChange={handleImageUpload} />
+                       </div>
+
+                       <button 
+                          onClick={handleSubmitMaintenance}
+                          disabled={isSaving || !maintenanceIssue}
+                          className="w-full bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-[10px] py-7 rounded-[2.5rem] shadow-2xl shadow-blue-600/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                       >
+                          {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Save size={20} />}
+                          {isSaving ? 'Submitting Request...' : 'Log Maintenance Request'}
+                       </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-start mb-12">
+                      <div className="space-y-4 flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-3">
+                            <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase shadow-lg border backdrop-blur-md ${getStatusStyle(selectedProperty.status)}`}>{selectedProperty.status}</span>
+                            <span className="bg-white/10 border border-white/20 text-zinc-700 dark:text-zinc-300 px-4 py-1.5 rounded-xl text-[9px] font-black uppercase">{selectedProperty.category}</span>
+                        </div>
                         {isEditing ? (
-                            <textarea 
-                                className="glass-input w-full h-44 p-6 rounded-[2rem] text-sm font-bold resize-none" 
-                                value={editFormData.description} 
-                                onChange={e => setEditFormData({...editFormData, description: e.target.value})}
+                            <input 
+                                className="glass-input text-3xl font-black text-zinc-900 dark:text-white tracking-tighter p-4 rounded-2xl w-full outline-none" 
+                                value={editFormData.name} 
+                                onChange={e => setEditFormData({...editFormData, name: e.target.value})}
                             />
                         ) : (
-                            <p className="text-zinc-600 dark:text-zinc-400 font-bold leading-relaxed text-lg border-l-4 border-blue-600 pl-8 py-6 bg-white/5 backdrop-blur-md rounded-r-[2.5rem]">
-                                {selectedProperty.description || "Portfolio brief pending submission."}
-                            </p>
+                            <h2 className="text-4xl md:text-5xl font-black text-zinc-900 dark:text-white tracking-tighter leading-tight">{selectedProperty.name}</h2>
                         )}
+                      </div>
+                      <div className="flex gap-4 ml-6">
+                        {(user.role === UserRole.AGENT || user.role === UserRole.ADMIN) && !isEditing && (
+                            <button 
+                                onClick={() => setIsEditing(true)}
+                                className="p-4 glass-input rounded-full text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all"
+                            >
+                                <Edit size={20} />
+                            </button>
+                        )}
+                        <button onClick={() => setSelectedProperty(null)} className="p-4 glass-input rounded-full text-zinc-500 hover:text-rose-500 transition-all hidden md:block">
+                            <X size={20} />
+                        </button>
+                      </div>
                     </div>
+                    
+                    <div className="space-y-12">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+                            {isEditing ? (
+                                <>
+                                    <InputWrapper label="Location">
+                                        <input className="glass-input w-full p-4 rounded-xl text-sm font-bold" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} />
+                                    </InputWrapper>
+                                    <InputWrapper label="Annual Rent (₦)">
+                                        <input type="number" className="glass-input w-full p-4 rounded-xl text-sm font-bold" value={editFormData.rent} onChange={e => setEditFormData({...editFormData, rent: parseInt(e.target.value) || 0})} />
+                                    </InputWrapper>
+                                    <InputWrapper label="Status">
+                                        <select className="glass-input w-full p-4 rounded-xl text-sm font-bold appearance-none" value={editFormData.status} onChange={e => setEditFormData({...editFormData, status: e.target.value as PropertyStatus})}>
+                                            <option value={PropertyStatus.DRAFT}>DRAFT</option>
+                                            <option value={PropertyStatus.LISTED}>LISTED</option>
+                                            <option value={PropertyStatus.VACANT}>VACANT</option>
+                                            <option value={PropertyStatus.OCCUPIED}>OCCUPIED</option>
+                                            <option value={PropertyStatus.ARCHIVED}>ARCHIVED</option>
+                                        </select>
+                                    </InputWrapper>
+                                    <InputWrapper label="Lifecycle Start">
+                                        <input type="date" className="glass-input w-full p-4 rounded-xl text-sm font-bold" value={editFormData.rentStartDate || ''} onChange={handleStartDateChange} />
+                                    </InputWrapper>
+                                    
+                                    <InputWrapper label="Property Category">
+                                        <select 
+                                          className="glass-input w-full p-4 rounded-xl text-sm font-bold appearance-none" 
+                                          value={editFormData.category} 
+                                          onChange={e => setEditFormData({...editFormData, category: e.target.value as PropertyCategory})}
+                                        >
+                                          <option value={PropertyCategory.RESIDENTIAL}>RESIDENTIAL</option>
+                                          <option value={PropertyCategory.COMMERCIAL}>COMMERCIAL</option>
+                                        </select>
+                                    </InputWrapper>
+                                    <InputWrapper label="Property Type">
+                                        <select 
+                                          className="glass-input w-full p-4 rounded-xl text-sm font-bold appearance-none" 
+                                          value={editFormData.type} 
+                                          onChange={e => setEditFormData({...editFormData, type: e.target.value as PropertyType})}
+                                        >
+                                          {PROPERTY_TYPES.map(type => (
+                                            <option key={type} value={type}>{type.toUpperCase()}</option>
+                                          ))}
+                                        </select>
+                                    </InputWrapper>
+                                </>
+                            ) : (
+                                <>
+                                    <DetailCard icon={MapPin} label="Location" value={selectedProperty.location} />
+                                    <DetailCard icon={DollarSign} label="Annual Yield" value={`₦${selectedProperty.rent.toLocaleString()}`} />
+                                    <DetailCard icon={Layout} label="Type" value={selectedProperty.type} />
+                                    <DetailCard icon={Building} label="Category" value={selectedProperty.category} />
+                                    {selectedProperty.rentStartDate && <DetailCard icon={CalendarDays} label="Start" value={selectedProperty.rentStartDate} />}
+                                </>
+                            )}
+                        </div>
 
-                    <div className="flex flex-col sm:flex-row gap-6 pt-12 border-t border-white/10">
-                        {isEditing ? (
-                            <>
-                                <button 
-                                    onClick={handleSave} 
-                                    disabled={isSaving}
-                                    className="flex-[2] bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-3xl shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-2"
-                                >
-                                    {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                                    Commit Lifecycle Updates
-                                </button>
-                                <button 
-                                    onClick={() => { setIsEditing(false); setEditFormData(selectedProperty); }}
-                                    className="flex-1 glass-input text-zinc-900 dark:text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-3xl hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center gap-2"
-                                >
-                                    <X size={18} /> Discard
-                                </button>
-                            </>
-                        ) : (
-                            <>
-                                <button className="flex-1 bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3">
-                                    <UserPlus size={20} /> Initiate Tenancy
-                                </button>
-                                <button className="flex-1 glass-input text-zinc-900 dark:text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center gap-3">
-                                    <Wrench size={20} /> Support Hub
-                                </button>
-                            </>
+                        {selectedProperty.tenantId && !isEditing && (
+                           <div className="p-8 bg-emerald-600/5 border border-emerald-600/20 rounded-[2.5rem] flex items-center justify-between">
+                              <div className="flex items-center gap-5">
+                                 <div className="w-14 h-14 bg-emerald-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                                    <UserCheck size={28} />
+                                 </div>
+                                 <div>
+                                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Active Resident</p>
+                                    <p className="text-xl font-black text-zinc-900 dark:text-white tracking-tighter">
+                                       {store.users.find(u => u.id === selectedProperty.tenantId)?.name || "Identity Protected"}
+                                    </p>
+                                 </div>
+                              </div>
+                              <div className="text-right">
+                                 <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Lease Expiry</p>
+                                 <p className="text-sm font-black text-rose-500">{selectedProperty.rentExpiryDate}</p>
+                              </div>
+                           </div>
                         )}
+
+                        <div className="space-y-4">
+                            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest flex items-center gap-2">
+                                <Info size={14} className="text-blue-600" /> Executive Summary
+                            </p>
+                            {isEditing ? (
+                                <textarea 
+                                    className="glass-input w-full h-44 p-6 rounded-[2rem] text-sm font-bold resize-none" 
+                                    value={editFormData.description} 
+                                    onChange={e => setEditFormData({...editFormData, description: e.target.value})}
+                                />
+                            ) : (
+                                <p className="text-zinc-600 dark:text-zinc-400 font-bold leading-relaxed text-lg border-l-4 border-blue-600 pl-8 py-6 bg-white/5 backdrop-blur-md rounded-r-[2.5rem]">
+                                    {selectedProperty.description || "Portfolio brief pending submission."}
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-6 pt-12 border-t border-white/10">
+                            {isEditing ? (
+                                <>
+                                    <button 
+                                        onClick={handleSave} 
+                                        disabled={isSaving}
+                                        className="flex-[2] bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-3xl shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                                        Commit Lifecycle Updates
+                                    </button>
+                                    <button 
+                                        onClick={() => { setIsEditing(false); setEditFormData(selectedProperty); }}
+                                        className="flex-1 glass-input text-zinc-900 dark:text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-3xl hover:bg-white/10 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <X size={18} /> Discard
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    {selectedProperty.status !== PropertyStatus.OCCUPIED && (user.role === UserRole.AGENT || user.role === UserRole.ADMIN) ? (
+                                       <button 
+                                          onClick={() => setShowTenantPicker(true)}
+                                          className="flex-1 bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3"
+                                       >
+                                          <UserPlus size={20} /> Initiate Tenancy
+                                       </button>
+                                    ) : (
+                                       <button className="flex-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] cursor-not-allowed flex items-center justify-center gap-3">
+                                          <CheckCircle2 size={20} /> Tenancy Locked
+                                       </button>
+                                    )}
+                                    {user.assignedPropertyId === selectedProperty.id && (
+                                       <button 
+                                          onClick={() => setShowMaintenanceForm(true)}
+                                          className="flex-1 bg-white/10 text-zinc-900 dark:text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] border border-white/20 hover:bg-white/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+                                       >
+                                          <Wrench size={20} /> Maintenance Request
+                                       </button>
+                                    )}
+                                </>
+                            )}
+                        </div>
                     </div>
-                </div>
+                  </>
+                )}
              </div>
           </div>
         </div>
@@ -394,7 +760,12 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
 const InputWrapper = ({ label, children }: { label: string, children?: React.ReactNode }) => (
     <div className="space-y-2">
         <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">{label}</p>
-        {children}
+        <div className="relative">
+          {children}
+          {React.isValidElement(children) && children.type === 'select' && (
+             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" size={16} />
+          )}
+        </div>
     </div>
 );
 

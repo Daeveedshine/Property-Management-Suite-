@@ -1,4 +1,3 @@
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   AGENT = 'AGENT',
@@ -140,6 +139,7 @@ export interface MaintenanceTicket {
   priority: TicketPriority;
   createdAt: string;
   aiAssessment?: string;
+  imageUrl?: string;
 }
 
 export interface Notification {

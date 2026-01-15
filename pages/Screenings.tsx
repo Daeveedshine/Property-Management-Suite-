@@ -1,11 +1,13 @@
+
 import React, { useState, useMemo } from 'react';
-import { User, UserRole, TenantApplication, ApplicationStatus, NotificationType } from '../types';
+import { User, UserRole, TenantApplication, ApplicationStatus, NotificationType, PropertyStatus, Agreement } from '../types';
 import { getStore, saveStore } from '../store';
+// Added AlertCircle and Loader2 to imports
 import { 
   ClipboardCheck, CheckCircle, XCircle, 
   Search, ChevronRight, ShieldCheck, Mail, Phone, Calendar, Download,
   User as UserIcon, MapPin, Briefcase, Info, Users, Home, Printer, FileText,
-  BadgeCheck, Building, Maximize2, X
+  BadgeCheck, Building, Maximize2, X, RefreshCw, Check, AlertCircle, Loader2
 } from 'lucide-react';
 
 interface ScreeningsProps {
@@ -18,11 +20,20 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
   const [selectedApp, setSelectedApp] = useState<TenantApplication | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [isRouting, setIsRouting] = useState(false);
+  const [routedPropertyId, setRoutedPropertyId] = useState<string | null>(null);
 
   const relevantApps = useMemo(() => {
     if (user.role === UserRole.ADMIN) return store.applications;
     return store.applications.filter(app => app.agentId === user.id);
   }, [store.applications, user.id, user.role]);
+
+  const availableProperties = useMemo(() => {
+    return store.properties.filter(p => 
+      p.agentId === user.id && 
+      (p.status === PropertyStatus.LISTED || p.status === PropertyStatus.VACANT)
+    );
+  }, [store.properties, user.id]);
 
   const handleUpdateStatus = (id: string, status: ApplicationStatus) => {
     const updatedApps = store.applications.map(app => app.id === id ? { ...app, status } : app);
@@ -43,6 +54,81 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
     saveStore(newState);
     setStore(newState);
     setSelectedApp(updatedApps.find(a => a.id === id) || null);
+  };
+
+  const handleRouteProperty = (propertyId: string) => {
+    if (!selectedApp) return;
+    setIsRouting(true);
+
+    setTimeout(() => {
+      const today = new Date();
+      const nextYear = new Date();
+      nextYear.setFullYear(today.getFullYear() + 1);
+      nextYear.setDate(today.getDate() - 1);
+
+      const startDate = today.toISOString().split('T')[0];
+      const endDate = nextYear.toISOString().split('T')[0];
+
+      // 1. Update Property Status & Tenant Link
+      const updatedProperties = store.properties.map(p => 
+        p.id === propertyId ? { 
+          ...p, 
+          tenantId: selectedApp.userId, 
+          status: PropertyStatus.OCCUPIED,
+          rentStartDate: startDate,
+          rentExpiryDate: endDate
+        } : p
+      );
+
+      // 2. Update User Profile with Assigned Property
+      const updatedUsers = store.users.map(u => 
+        u.id === selectedApp.userId ? { ...u, assignedPropertyId: propertyId } : u
+      );
+
+      // 3. Link this Application record to the routed Property
+      const updatedApplications = store.applications.map(app => 
+        app.id === selectedApp.id ? { ...app, propertyId: propertyId } : app
+      );
+
+      // 4. Create Legal Agreement Entry
+      const newAgreement: Agreement = {
+        id: `a${Date.now()}`,
+        propertyId: propertyId,
+        tenantId: selectedApp.userId,
+        version: 1,
+        startDate,
+        endDate,
+        status: 'active'
+      };
+
+      // 5. Dispatch Activation Notification
+      const propertyName = store.properties.find(p => p.id === propertyId)?.name;
+      const notification = {
+        id: `n_route_${Date.now()}`,
+        userId: selectedApp.userId,
+        title: 'Tenancy Activated',
+        message: `Congratulations! Your lifecycle for ${propertyName} has been officially routed and activated.`,
+        type: NotificationType.SUCCESS,
+        timestamp: new Date().toISOString(),
+        isRead: false,
+        linkTo: 'dashboard'
+      };
+
+      const updatedStore = { 
+        ...store, 
+        properties: updatedProperties, 
+        users: updatedUsers,
+        applications: updatedApplications,
+        agreements: [...store.agreements, newAgreement],
+        notifications: [notification, ...store.notifications]
+      };
+
+      saveStore(updatedStore);
+      setStore(updatedStore);
+      setSelectedApp(updatedApplications.find(a => a.id === selectedApp.id) || null);
+      setIsRouting(false);
+      setRoutedPropertyId(null);
+    }, 1200);
   };
 
   const handlePrint = () => {
@@ -103,7 +189,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
           )}
         </div>
 
-        {/* Right Detail View - This is what gets printed */}
+        {/* Right Detail View */}
         <div className="lg:col-span-2">
           {selectedApp ? (
             <div id="printable-dossier" className="bg-white rounded-[4rem] shadow-2xl overflow-hidden border border-zinc-200 animate-in slide-in-from-right-8 duration-700 print:shadow-none print:rounded-none print:border-none print:m-0 print:p-0">
@@ -168,6 +254,67 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
                </div>
                
                <div className="p-10 md:p-14 space-y-16 text-black print:p-12 print:pt-4">
+                  {/* ROUTING HUB: Integrated Property Assignment */}
+                  {selectedApp.status === ApplicationStatus.APPROVED && !store.users.find(u => u.id === selectedApp.userId)?.assignedPropertyId && (
+                    <section className="p-8 bg-blue-600/5 border-2 border-blue-600/20 rounded-[3rem] space-y-8 animate-in zoom-in-95 duration-500 print:hidden">
+                       <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                             <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-lg">
+                                <RefreshCw size={24} />
+                             </div>
+                             <div>
+                                <h4 className="text-xl font-black text-zinc-900 tracking-tight">Lifecycle Asset Routing</h4>
+                                <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Route an available property to this candidate</p>
+                             </div>
+                          </div>
+                          {selectedApp.propertyId !== 'PENDING' && (
+                             <div className="px-4 py-1.5 bg-amber-500/10 text-amber-600 rounded-full text-[9px] font-black uppercase border border-amber-500/20">
+                                Target: {store.properties.find(p => p.id === selectedApp.propertyId)?.name}
+                             </div>
+                          )}
+                       </div>
+
+                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {availableProperties.map(prop => (
+                             <button 
+                                key={prop.id}
+                                onClick={() => setRoutedPropertyId(prop.id)}
+                                className={`p-6 rounded-3xl border-2 transition-all text-left flex items-start gap-4 hover:border-blue-600 ${routedPropertyId === prop.id ? 'border-blue-600 bg-blue-600/10 shadow-xl' : 'bg-white border-zinc-100 shadow-sm'}`}
+                             >
+                                <div className={`p-3 rounded-2xl ${routedPropertyId === prop.id ? 'bg-blue-600 text-white' : 'bg-zinc-50 text-zinc-400'}`}>
+                                   <Building size={20} />
+                                </div>
+                                <div className="min-w-0">
+                                   <p className="font-black text-zinc-900 tracking-tight truncate">{prop.name}</p>
+                                   <p className="text-[10px] font-bold text-zinc-500 truncate">{prop.location}</p>
+                                   <p className="text-xs font-black text-blue-600 mt-1">₦{prop.rent.toLocaleString()}/yr</p>
+                                </div>
+                                {routedPropertyId === prop.id && <Check size={20} className="text-blue-600 ml-auto shrink-0" />}
+                             </button>
+                          ))}
+                          {availableProperties.length === 0 && (
+                             <div className="col-span-full py-12 text-center text-zinc-400 opacity-60">
+                                <AlertCircle size={32} className="mx-auto mb-2" />
+                                <p className="text-[10px] font-black uppercase tracking-widest">No available assets found in your registry</p>
+                             </div>
+                          )}
+                       </div>
+
+                       {routedPropertyId && (
+                          <div className="pt-4 animate-in slide-in-from-bottom-4">
+                             <button 
+                               onClick={() => handleRouteProperty(routedPropertyId)}
+                               disabled={isRouting}
+                               className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-[0.2em] text-[10px] shadow-2xl shadow-blue-600/20 flex items-center justify-center gap-3 hover:bg-black transition-all active:scale-95"
+                             >
+                                {isRouting ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+                                {isRouting ? 'routing lifecycle...' : 'Confirm Routing & Activate Tenancy'}
+                             </button>
+                          </div>
+                       )}
+                    </section>
+                  )}
+
                   {/* Section 1: Identity */}
                   <section className="space-y-10">
                     <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.4em] border-b-2 border-zinc-100 pb-4 flex items-center gap-3">
@@ -228,12 +375,12 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
                              )}
                           </div>
                        </div>
-                       <div className="p-12 bg-zinc-950 rounded-[3.5rem] flex flex-col items-center justify-center text-center shadow-inner print:bg-white print:border-4 print:rounded-none print:border-zinc-200">
-                          <p className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em] mb-6 print:text-zinc-400">Digital Legal Authentication</p>
-                          <p className="text-5xl font-serif italic text-white border-b-2 border-zinc-800 pb-4 px-10 print:text-black print:border-zinc-200">
+                       <div className="p-14 bg-zinc-950 rounded-[4rem] flex flex-col items-center justify-center text-center shadow-2xl print:bg-white print:border-4 print:rounded-none print:border-zinc-200">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] mb-8 print:text-zinc-400">Digital Legal Authentication</p>
+                          <p className="text-5xl font-serif italic text-white border-b-2 border-zinc-800 pb-6 px-12 print:text-black print:border-zinc-200">
                             {selectedApp.signature}
                           </p>
-                          <div className="mt-8 flex items-center gap-3 text-emerald-500">
+                          <div className="mt-10 flex items-center gap-4 text-emerald-500">
                              <BadgeCheck size={20} />
                              <span className="text-[9px] font-black uppercase tracking-[0.3em]">Electronically Verified</span>
                           </div>
@@ -253,9 +400,11 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
 
                   {/* Action Buttons - Hidden on print */}
                   <div className="pt-12 border-t border-zinc-100 flex flex-col sm:flex-row gap-6 print:hidden">
-                     <button onClick={() => handleUpdateStatus(selectedApp.id, ApplicationStatus.APPROVED)} className="flex-[2] bg-emerald-600 hover:bg-black text-white py-6 rounded-[2rem] font-black uppercase text-xs flex items-center justify-center gap-3 transition-all shadow-xl shadow-emerald-100 active:scale-95">
-                        <CheckCircle size={20} /> Finalize Approval
-                     </button>
+                     {selectedApp.status !== ApplicationStatus.APPROVED && (
+                        <button onClick={() => handleUpdateStatus(selectedApp.id, ApplicationStatus.APPROVED)} className="flex-[2] bg-emerald-600 hover:bg-black text-white py-6 rounded-[2rem] font-black uppercase text-xs flex items-center justify-center gap-3 transition-all shadow-xl shadow-emerald-100 active:scale-95">
+                           <CheckCircle size={20} /> Finalize Approval
+                        </button>
+                     )}
                      <button onClick={() => handleUpdateStatus(selectedApp.id, ApplicationStatus.REJECTED)} className="flex-1 bg-rose-50 border-2 border-rose-100 text-rose-500 py-6 rounded-[2rem] font-black uppercase text-xs flex items-center justify-center gap-3 transition-all hover:bg-rose-500 hover:text-white active:scale-95">
                         <XCircle size={20} /> Decline Candidate
                      </button>
