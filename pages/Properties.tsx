@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { User, UserRole, Property, PropertyStatus, PropertyCategory, PropertyType, ApplicationStatus, Agreement, NotificationType, MaintenanceTicket, TicketStatus, TicketPriority } from '../types';
-import { getStore, saveStore } from '../store';
+import { getStore, saveStore, formatCurrency, formatDate } from '../store';
 import { 
   MapPin, Plus, Edit, X, Wrench, Info, ArrowRight, DollarSign, 
   UserPlus, Save, Loader2, Tag, Layout, Briefcase, UserCheck, 
@@ -41,6 +41,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { settings } = store;
 
   const properties = useMemo(() => {
     let list: Property[] = [];
@@ -401,12 +402,12 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                     </div>
                     <div className="p-4 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
                       <p className="text-[8px] font-black text-zinc-500 uppercase mb-1 flex items-center gap-1">Start</p>
-                      <p className="text-xs font-black text-zinc-900 dark:text-white">{property.rentStartDate || '---'}</p>
+                      <p className="text-xs font-black text-zinc-900 dark:text-white">{formatDate(property.rentStartDate || '---', settings)}</p>
                     </div>
                     <div className="p-4 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
                       <p className="text-[8px] font-black text-zinc-500 uppercase mb-1 flex items-center gap-1">Expiry</p>
                       <p className="text-xs font-black text-blue-600 dark:text-blue-400">
-                        {property.rentExpiryDate || '---'}
+                        {formatDate(property.rentExpiryDate || '---', settings)}
                       </p>
                     </div>
                   </div>
@@ -431,7 +432,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                   </div>
                   <div className="text-right">
                     <p className="text-[8px] font-black text-zinc-500 uppercase mb-1 tracking-widest">Yield</p>
-                    <p className="text-2xl font-black text-zinc-900 dark:text-white tracking-tighter leading-none">₦{property.rent.toLocaleString()}</p>
+                    <p className="text-xl font-black text-zinc-900 dark:text-white tracking-tighter leading-none">{formatCurrency(property.rent, settings)}</p>
                   </div>
                 </div>
               </div>
@@ -605,7 +606,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                                     <InputWrapper label="Location">
                                         <input className="glass-input w-full p-4 rounded-xl text-sm font-bold" value={editFormData.location} onChange={e => setEditFormData({...editFormData, location: e.target.value})} />
                                     </InputWrapper>
-                                    <InputWrapper label="Annual Rent (₦)">
+                                    <InputWrapper label="Annual Rent (Base NGN)">
                                         <input type="number" className="glass-input w-full p-4 rounded-xl text-sm font-bold" value={editFormData.rent} onChange={e => setEditFormData({...editFormData, rent: parseInt(e.target.value) || 0})} />
                                     </InputWrapper>
                                     <InputWrapper label="Status">
@@ -646,10 +647,10 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                             ) : (
                                 <>
                                     <DetailCard icon={MapPin} label="Location" value={selectedProperty.location} />
-                                    <DetailCard icon={DollarSign} label="Annual Yield" value={`₦${selectedProperty.rent.toLocaleString()}`} />
+                                    <DetailCard icon={DollarSign} label="Annual Yield" value={formatCurrency(selectedProperty.rent, settings)} />
                                     <DetailCard icon={Layout} label="Type" value={selectedProperty.type} />
                                     <DetailCard icon={Building} label="Category" value={selectedProperty.category} />
-                                    {selectedProperty.rentStartDate && <DetailCard icon={CalendarDays} label="Start" value={selectedProperty.rentStartDate} />}
+                                    {selectedProperty.rentStartDate && <DetailCard icon={CalendarDays} label="Start" value={formatDate(selectedProperty.rentStartDate, settings)} />}
                                 </>
                             )}
                         </div>
@@ -669,7 +670,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                               </div>
                               <div className="text-right">
                                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Lease Expiry</p>
-                                 <p className="text-sm font-black text-rose-500">{selectedProperty.rentExpiryDate}</p>
+                                 <p className="text-sm font-black text-rose-500">{formatDate(selectedProperty.rentExpiryDate || '', settings)}</p>
                               </div>
                            </div>
                         )}

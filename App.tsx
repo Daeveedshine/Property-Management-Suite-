@@ -14,10 +14,11 @@ import Applications from './pages/Applications';
 import Screenings from './pages/Screenings';
 import AdminApplications from './pages/AdminApplications';
 import Profile from './pages/Profile';
+import Settings from './pages/Settings';
 import { 
   Home, Building2, Wrench, CreditCard, LogOut, Menu, X, Shield, 
   FileText, Bell, Table, Building, ClipboardCheck, UserPlus, 
-  User as UserIcon, Moon, Sun, ChevronLeft, ChevronRight 
+  User as UserIcon, Moon, Sun, ChevronLeft, ChevronRight, Settings as SettingsIcon
 } from 'lucide-react';
 
 export const Logo: React.FC<{ size?: number, className?: string }> = ({ size = 24, className = "" }) => (
@@ -80,11 +81,24 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
+  // Sync Settings Function
+  const syncVisualSettings = () => {
+    const store = getStore();
+    const { appearance } = store.settings;
+    
+    document.documentElement.classList.toggle('disable-animations', !appearance.animations);
+    document.documentElement.classList.toggle('ui-compact', appearance.density === 'compact');
+    document.documentElement.classList.toggle('no-glass', !appearance.glassEffect);
+  };
+
   useEffect(() => {
     const store = getStore();
     const savedTheme = store.theme || 'dark';
     setTheme(savedTheme);
     document.documentElement.classList.toggle('dark', savedTheme === 'dark');
+    
+    // Initial sync
+    syncVisualSettings();
 
     const timer = setTimeout(() => {
       if (store.currentUser) {
@@ -122,6 +136,7 @@ const App: React.FC = () => {
     setUser(loggedUser);
     setView(loggedUser.role === UserRole.ADMIN ? 'admin_dashboard' : 'dashboard');
     refreshUnreadCount();
+    syncVisualSettings(); // Refresh visual state on login
   };
 
   const handleLogout = () => {
@@ -147,6 +162,7 @@ const App: React.FC = () => {
       case 'screenings': return <Screenings user={user} onNavigate={setView} />;
       case 'admin_applications': return <AdminApplications user={user} onBack={() => setView('admin_dashboard')} />;
       case 'profile': return <Profile user={user} onUserUpdate={setUser} />;
+      case 'settings': return <Settings user={user} onThemeChange={setTheme} onSettingsUpdate={syncVisualSettings} />;
       default: return <Dashboard user={user} />;
     }
   };
@@ -162,6 +178,7 @@ const App: React.FC = () => {
     { id: 'payments', label: 'Rent & Payments', icon: CreditCard, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
     { id: 'reports', label: 'Global Registry', icon: Table, roles: [UserRole.AGENT, UserRole.ADMIN] },
     { id: 'notifications', label: 'Notifications', icon: Bell, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN], badge: unreadCount },
+    { id: 'settings', label: 'Settings', icon: SettingsIcon, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
     { id: 'profile', label: 'My Profile', icon: UserIcon, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
   ];
 
@@ -203,7 +220,7 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Sidebar - Enhanced with Collapsible Desktop State */}
+      {/* Sidebar */}
       <aside className={`
         ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} 
         fixed inset-y-0 left-0 z-[100] w-[85%] sm:w-72 md:w-auto glass-card text-zinc-900 dark:text-zinc-100 transition-all duration-300 ease-out 

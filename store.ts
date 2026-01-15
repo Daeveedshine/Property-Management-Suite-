@@ -2,6 +2,24 @@ import { User, Property, Agreement, Payment, MaintenanceTicket, Notification, Us
 
 const STORAGE_KEY = 'prop_lifecycle_data';
 
+export interface UserSettings {
+  notifications: {
+    email: boolean;
+    push: boolean;
+    maintenance: boolean;
+    payments: boolean;
+  };
+  appearance: {
+    density: 'comfortable' | 'compact';
+    animations: boolean;
+    glassEffect: boolean;
+  };
+  localization: {
+    currency: 'NGN' | 'USD' | 'EUR';
+    dateFormat: 'DD/MM/YYYY' | 'MM/DD/YYYY';
+  };
+}
+
 interface AppState {
   users: User[];
   properties: Property[];
@@ -12,7 +30,26 @@ interface AppState {
   applications: TenantApplication[];
   currentUser: User | null;
   theme: 'light' | 'dark';
+  settings: UserSettings;
 }
+
+const initialSettings: UserSettings = {
+  notifications: {
+    email: true,
+    push: true,
+    maintenance: true,
+    payments: true
+  },
+  appearance: {
+    density: 'comfortable',
+    animations: true,
+    glassEffect: true
+  },
+  localization: {
+    currency: 'NGN',
+    dateFormat: 'DD/MM/YYYY'
+  }
+};
 
 const initialData: AppState = {
   users: [
@@ -70,13 +107,48 @@ const initialData: AppState = {
   ],
   currentUser: null,
   theme: 'dark',
+  settings: initialSettings,
 };
 
 export const getStore = (): AppState => {
   const saved = localStorage.getItem(STORAGE_KEY);
-  return saved ? JSON.parse(saved) : initialData;
+  if (!saved) return initialData;
+  const parsed = JSON.parse(saved);
+  if (!parsed.settings) parsed.settings = initialSettings;
+  return parsed;
 };
 
 export const saveStore = (state: AppState) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+};
+
+/**
+ * UTILITY: Format currency based on user settings
+ */
+export const formatCurrency = (amount: number, settings: UserSettings): string => {
+  const rates = { NGN: 1, USD: 0.00065, EUR: 0.0006 }; // Simulated exchange rates from Base NGN
+  const converted = amount * rates[settings.localization.currency];
+  
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: settings.localization.currency,
+    minimumFractionDigits: settings.localization.currency === 'NGN' ? 0 : 2
+  }).format(converted);
+};
+
+/**
+ * UTILITY: Format date based on user settings
+ */
+export const formatDate = (dateString: string, settings: UserSettings): string => {
+  if (!dateString || dateString === '---') return '---';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+
+  return settings.localization.dateFormat === 'DD/MM/YYYY' 
+    ? `${day}/${month}/${year}` 
+    : `${month}/${day}/${year}`;
 };

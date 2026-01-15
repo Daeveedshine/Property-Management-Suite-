@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { User, UserRole, PropertyStatus, TicketStatus, NotificationType, ApplicationStatus } from '../types';
-import { getStore } from '../store';
+import { getStore, formatCurrency, formatDate } from '../store';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Building, Users, AlertTriangle, TrendingUp, Clock, FileText, Wrench, Bell, UserPlus } from 'lucide-react';
 
@@ -11,28 +11,32 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const store = getStore();
   const isDark = store.theme === 'dark';
+  const { settings } = store;
 
   const stats = useMemo(() => {
     if (user.role === UserRole.AGENT) {
+      const revenue = store.payments.filter(p => p.status === 'paid').reduce((acc, curr) => acc + curr.amount, 0);
       return {
         totalProperties: store.properties.filter(p => p.agentId === user.id).length,
         occupiedProperties: store.properties.filter(p => p.agentId === user.id && p.status === PropertyStatus.OCCUPIED).length,
         pendingTickets: store.tickets.filter(t => t.status === TicketStatus.OPEN).length, 
-        monthlyRevenue: store.payments.filter(p => p.status === 'paid').reduce((acc, curr) => acc + curr.amount, 0),
+        monthlyRevenue: formatCurrency(revenue, settings),
         pendingApps: store.applications.filter(a => a.agentId === user.id && a.status === ApplicationStatus.PENDING).length
       };
     } else {
       const myProperty = store.properties.find(p => p.id === user.assignedPropertyId);
       const myTickets = store.tickets.filter(t => t.tenantId === user.id);
       const myPayments = store.payments.filter(p => p.tenantId === user.id);
+      const leaseEndDate = store.agreements.find(a => a.tenantId === user.id)?.endDate;
+      
       return {
         propertyName: myProperty?.name || 'N/A',
         rentStatus: myPayments.find(p => p.status === 'pending') ? 'Pending' : 'Paid',
         activeTickets: myTickets.filter(t => t.status !== TicketStatus.RESOLVED).length,
-        leaseExpiry: store.agreements.find(a => a.tenantId === user.id)?.endDate || 'N/A'
+        leaseExpiry: leaseEndDate ? formatDate(leaseEndDate, settings) : 'N/A'
       };
     }
-  }, [user, store]);
+  }, [user, store, settings]);
 
   const recentNotifications = useMemo(() => {
     return store.notifications
@@ -42,15 +46,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   }, [store.notifications, user.id]);
 
   const paymentData = useMemo(() => {
+    // Scaling graph data based on currency setting
+    const scale = settings.localization.currency === 'NGN' ? 1 : (settings.localization.currency === 'USD' ? 0.00065 : 0.0006);
     return [
-      { name: 'Jan', amount: 4000000 },
-      { name: 'Feb', amount: 3000000 },
-      { name: 'Mar', amount: 2000000 },
-      { name: 'Apr', amount: 2780000 },
-      { name: 'May', amount: 1890000 },
-      { name: 'Jun', amount: 2390000 },
+      { name: 'Jan', amount: 4000000 * scale },
+      { name: 'Feb', amount: 3000000 * scale },
+      { name: 'Mar', amount: 2000000 * scale },
+      { name: 'Apr', amount: 2780000 * scale },
+      { name: 'May', amount: 1890000 * scale },
+      { name: 'Jun', amount: 2390000 * scale },
     ];
-  }, []);
+  }, [settings.localization.currency]);
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-12">
@@ -65,7 +71,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
             <StatCard label="Portfolio" value={stats.totalProperties} icon={Building} color="blue" />
             <StatCard label="Pipeline" value={stats.pendingApps} icon={UserPlus} color="purple" />
             <StatCard label="Repairs" value={stats.pendingTickets} icon={AlertTriangle} color="orange" />
-            <StatCard label="Revenue" value={`₦${(stats.monthlyRevenue / 1000000).toFixed(1)}M`} icon={TrendingUp} color="emerald" />
+            <StatCard label="Revenue" value={stats.monthlyRevenue} icon={TrendingUp} color="emerald" />
           </>
         ) : (
           <>
@@ -81,7 +87,7 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         <div className="lg:col-span-2 glass-card p-8 rounded-[3rem] shadow-2xl">
           <div className="flex items-center justify-between mb-10">
             <h3 className="text-xs font-black uppercase tracking-[0.2em] text-zinc-900 dark:text-white">Revenue Lifecycle</h3>
-            <div className="bg-blue-600/10 dark:bg-blue-400/10 px-4 py-2 rounded-xl text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 border border-blue-600/20">Monthly Yield</div>
+            <div className="bg-blue-600/10 dark:bg-blue-400/10 px-4 py-2 rounded-xl text-[10px] font-black uppercase text-blue-600 dark:text-blue-400 border border-blue-600/20">Monthly Yield ({settings.localization.currency})</div>
           </div>
           <div className="h-72 w-full min-w-0" style={{ minHeight: '320px' }}>
             <ResponsiveContainer width="100%" height="100%">
@@ -145,7 +151,7 @@ const StatCard = ({ label, value, icon: Icon, color }: any) => {
           <Icon className="w-5 h-5" />
         </div>
       </div>
-      <p className="text-3xl font-black text-zinc-900 dark:text-white truncate tracking-tighter leading-none">{value}</p>
+      <p className="text-2xl font-black text-zinc-900 dark:text-white truncate tracking-tighter leading-none">{value}</p>
     </div>
   );
 };

@@ -32,10 +32,18 @@
       :root {
         --glass-bg: rgba(255, 255, 255, 0.45);
         --glass-border: rgba(255, 255, 255, 0.3);
+        --ui-p-base: 2.5rem;
+        --ui-gap: 2.5rem;
       }
       .dark {
         --glass-bg: rgba(0, 0, 0, 0.45);
         --glass-border: rgba(255, 255, 255, 0.1);
+      }
+
+      /* Compact Mode Variables */
+      .ui-compact {
+        --ui-p-base: 1.25rem;
+        --ui-gap: 1.5rem;
       }
 
       body {
@@ -110,6 +118,15 @@
         transform: scale(0.9);
       }
       
+      /* Disable Animations Override */
+      .disable-animations *, 
+      .disable-animations svg,
+      .disable-animations button:hover svg {
+        transition: none !important;
+        animation: none !important;
+        transform: none !important;
+      }
+
       /* Specific Tool Animations */
       button:hover .lucide-wrench {
         transform: rotate(35deg) scale(1.2);
@@ -146,6 +163,17 @@
         border: 1px solid var(--glass-border);
         box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.1);
       }
+
+      /* Solid Mode Override */
+      .no-glass .glass-card {
+        background: #ffffff !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05) !important;
+      }
+      .dark.no-glass .glass-card {
+        background: #111113 !important;
+      }
       
       .glass-input {
         background: rgba(255, 255, 255, 0.05);
@@ -153,6 +181,14 @@
         border: 1px solid rgba(255, 255, 255, 0.1);
         transition: all 0.3s ease;
       }
+      .no-glass .glass-input {
+        background: #f8fafc !important;
+        backdrop-filter: none !important;
+      }
+      .dark.no-glass .glass-input {
+        background: #000000 !important;
+      }
+
       .glass-input:focus {
         background: rgba(255, 255, 255, 0.1);
         border-color: #2563EB;
