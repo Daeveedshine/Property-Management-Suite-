@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
 import { getStore, saveStore } from '../store';
-import { User as UserIcon, Mail, Phone, Shield, Fingerprint, Save, CheckCircle2, AlertCircle } from 'lucide-react';
+import { User as UserIcon, Mail, Phone, Shield, Fingerprint, Save, CheckCircle2, AlertCircle, Copy, Check, Link as LinkIcon } from 'lucide-react';
 
 interface ProfileProps {
   user: User;
@@ -14,6 +14,8 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const [userPhone, setUserPhone] = useState(user.phone || '');
   const [isSaving, setIsSaving] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +34,23 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
       setShowSaved(true);
       setTimeout(() => setShowSaved(false), 3000);
     }, 1000);
+  };
+
+  const handleCopyId = () => {
+    if (user.id) {
+        navigator.clipboard.writeText(user.id);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleCopyLink = () => {
+      if (user.id) {
+          const url = `${window.location.origin}?ref=${user.id}`;
+          navigator.clipboard.writeText(url);
+          setLinkCopied(true);
+          setTimeout(() => setLinkCopied(false), 2000);
+      }
   };
 
   return (
@@ -53,15 +72,39 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
               <Shield size={12} className="mr-2" /> {user.role}
             </div>
             
-            <div className="mt-8 w-full pt-8 border-t border-zinc-800 space-y-4">
+            <div className="mt-8 w-full pt-8 border-t border-zinc-800 space-y-6">
                <div>
                   <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Unique Suite ID</p>
                   <div className="bg-black p-3 rounded-xl border border-zinc-800 flex items-center justify-between group">
                     <span className="text-sm font-mono font-bold text-blue-400">{user.id}</span>
-                    <Fingerprint size={16} className="text-zinc-700 group-hover:text-blue-500 transition-colors" />
+                    <button 
+                        onClick={handleCopyId}
+                        className="p-2 text-zinc-600 hover:text-white transition-colors rounded-lg active:scale-95"
+                        title="Copy ID"
+                    >
+                        {copied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
+                    </button>
                   </div>
                   <p className="mt-2 text-[9px] text-zinc-600 font-medium italic">Use this ID to receive applications or link properties.</p>
                </div>
+
+               {user.role === UserRole.AGENT && (
+                 <div>
+                    <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-1">Tenant Onboarding Link</p>
+                    <div className="bg-blue-900/10 p-3 rounded-xl border border-blue-600/20 flex items-center justify-between group cursor-pointer" onClick={handleCopyLink}>
+                      <div className="flex items-center gap-2 overflow-hidden">
+                          <LinkIcon size={14} className="text-blue-500 shrink-0" />
+                          <span className="text-xs font-medium text-blue-400 truncate">spaceya.app?ref={user.id}</span>
+                      </div>
+                      <button 
+                          className="p-2 text-blue-400 hover:text-white transition-colors rounded-lg"
+                      >
+                          {linkCopied ? <Check size={16} className="text-emerald-500" /> : <Copy size={16} />}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[9px] text-zinc-600 font-medium italic">Share this link. New tenants will be auto-routed to your application inbox.</p>
+                 </div>
+               )}
             </div>
           </div>
         </div>

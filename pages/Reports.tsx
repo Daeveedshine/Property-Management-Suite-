@@ -1,7 +1,8 @@
+
 import React, { useState, useMemo } from 'react';
 import { User, UserRole, Property, Agreement } from '../types';
 import { getStore } from '../store';
-import { Download, Search, Phone, Calendar, Building, User as UserIcon, DollarSign, Filter, MoreHorizontal, AlertCircle, Table } from 'lucide-react';
+import { Download, Search, Phone, Calendar, Building, User as UserIcon, DollarSign, Filter, MoreHorizontal, AlertCircle, Table, MapPin, Tag } from 'lucide-react';
 
 interface ReportsProps {
   user: User;
@@ -11,6 +12,8 @@ interface ReportRow {
   tenantName: string;
   tenantPhone: string;
   propertyName: string;
+  propertyType: string;
+  propertyAddress: string;
   rentAmount: number;
   expiryDate: string;
   status: string;
@@ -50,6 +53,8 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
         tenantName: tenant.name,
         tenantPhone: tenant.phone || 'No phone provided',
         propertyName: property?.name || 'Unassigned',
+        propertyType: property?.type || 'N/A',
+        propertyAddress: property?.location || 'N/A',
         rentAmount: property?.rent || 0,
         expiryDate: agreement?.endDate || 'N/A',
         status: agreement?.status || 'No active lease',
@@ -61,13 +66,14 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
     return rows.filter(row => 
       row.tenantName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       row.propertyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      row.propertyAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
       row.tenantPhone.includes(searchTerm)
     );
   }, [store, searchTerm, user]);
 
   const handleExport = () => {
-    const headers = ['Tenant', 'Phone', 'Property', 'Annual Rent (Naira)', 'Expiry Date'];
-    const csvRows = reportData.map(r => `${r.tenantName},${r.tenantPhone},${r.propertyName},${r.rentAmount},${r.expiryDate}`);
+    const headers = ['Tenant', 'Phone', 'Property Name', 'Rent Type', 'Address', 'Annual Rent (Naira)', 'Expiry Date'];
+    const csvRows = reportData.map(r => `"${r.tenantName}","${r.tenantPhone}","${r.propertyName}","${r.propertyType}","${r.propertyAddress}","${r.rentAmount}","${r.expiryDate}"`);
     const csvContent = [headers.join(','), ...csvRows].join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -115,7 +121,7 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
             <input 
               type="text" 
-              placeholder="Search by name, property, or phone..."
+              placeholder="Search by name, address, or phone..."
               className="w-full pl-10 pr-4 py-2 bg-black border border-zinc-800 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-600 transition-all text-white"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
@@ -131,10 +137,11 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
             <thead>
               <tr className="bg-black text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                 <th className="px-6 py-4"><div className="flex items-center"><UserIcon className="w-3 h-3 mr-2" /> Tenant Name</div></th>
-                <th className="px-6 py-4"><div className="flex items-center"><Phone className="w-3 h-3 mr-2" /> Phone Number</div></th>
-                <th className="px-6 py-4"><div className="flex items-center"><Building className="w-3 h-3 mr-2" /> Property</div></th>
+                <th className="px-6 py-4"><div className="flex items-center"><Building className="w-3 h-3 mr-2" /> Property & Type</div></th>
+                <th className="px-6 py-4"><div className="flex items-center"><MapPin className="w-3 h-3 mr-2" /> Address</div></th>
+                <th className="px-6 py-4"><div className="flex items-center"><Phone className="w-3 h-3 mr-2" /> Contact</div></th>
                 <th className="px-6 py-4"><div className="flex items-center font-black">₦ Annual Rent</div></th>
-                <th className="px-6 py-4"><div className="flex items-center"><Calendar className="w-3 h-3 mr-2" /> Expiry Date</div></th>
+                <th className="px-6 py-4"><div className="flex items-center"><Calendar className="w-3 h-3 mr-2" /> Expiry</div></th>
                 <th className="px-6 py-4 text-center">Status</th>
               </tr>
             </thead>
@@ -144,14 +151,25 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className="text-sm font-bold text-white">{row.tenantName}</span>
-                      <span className="text-[10px] text-zinc-500 truncate max-w-[150px]">{row.status}</span>
+                      <span className="text-[10px] text-zinc-500 truncate max-w-[150px] uppercase">ID: {idx + 100}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-xs font-medium text-zinc-400">{row.tenantPhone}</span>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-blue-400">{row.propertyName}</span>
+                      <div className="flex items-center gap-1 mt-1 text-zinc-500">
+                        <Tag className="w-3 h-3" />
+                        <span className="text-[10px] font-bold uppercase">{row.propertyType}</span>
+                      </div>
+                    </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-xs font-bold text-blue-400">{row.propertyName}</span>
+                     <span className="text-xs font-medium text-zinc-400 truncate max-w-[150px] block" title={row.propertyAddress}>
+                        {row.propertyAddress}
+                     </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-xs font-medium text-zinc-400">{row.tenantPhone}</span>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm font-black text-white">₦{row.rentAmount.toLocaleString()}</span>
@@ -178,7 +196,7 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan={6} className="px-6 py-20 text-center">
+                  <td colSpan={7} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center">
                       <Table className="w-12 h-12 text-zinc-800 mb-4" />
                       <p className="text-zinc-600 font-bold">No tenant data found matching your query.</p>

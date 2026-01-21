@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { User, Notification, NotificationType } from '../types';
 import { getStore, saveStore } from '../store';
-import { Bell, Check, Trash2, Info, AlertTriangle, AlertCircle, CheckCircle2, MoreVertical, Search } from 'lucide-react';
+import { Bell, Check, Trash2, Info, AlertTriangle, AlertCircle, CheckCircle2, MoreVertical, Search, Download } from 'lucide-react';
 
 interface NotificationsProps {
   user: User;
@@ -123,7 +123,7 @@ const Notifications: React.FC<NotificationsProps> = ({ user, onRefreshCount, onN
                     {getTimeAgo(notification.timestamp)}
                 </span>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed mb-3">
+              <p className="text-xs text-slate-600 leading-relaxed mb-3 whitespace-pre-wrap">
                 {notification.message}
               </p>
               
@@ -135,6 +135,11 @@ const Notifications: React.FC<NotificationsProps> = ({ user, onRefreshCount, onN
                   >
                     View Details
                   </button>
+                )}
+                {notification.attachmentUrl && (
+                  <a href={notification.attachmentUrl} download className="text-[10px] font-bold text-emerald-600 flex items-center gap-1 hover:underline uppercase tracking-wider">
+                    <Download size={12} /> Download Attachment
+                  </a>
                 )}
                 {!notification.isRead && (
                   <button 

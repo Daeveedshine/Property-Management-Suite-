@@ -1,12 +1,14 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { User, UserRole, Property, PropertyStatus, PropertyCategory, PropertyType, ApplicationStatus, Agreement, NotificationType, MaintenanceTicket, TicketStatus, TicketPriority } from '../types';
+
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { User, UserRole, Property, PropertyStatus, PropertyCategory, PropertyType, ApplicationStatus, Agreement, NotificationType, MaintenanceTicket, TicketStatus, TicketPriority, Notification } from '../types';
 import { getStore, saveStore, formatCurrency, formatDate } from '../store';
 import { 
   MapPin, Plus, Edit, X, Wrench, Info, ArrowRight, DollarSign, 
   UserPlus, Save, Loader2, Tag, Layout, Briefcase, UserCheck, 
   Maximize2, Users, CalendarDays, Clock, FileText, ChevronDown,
   ArrowUpNarrowWide, ArrowDownWideNarrow, CalendarRange, ListFilter,
-  Search, CheckCircle2, ClipboardCheck, Building, Camera, Image as ImageIcon, AlertTriangle
+  Search, CheckCircle2, ClipboardCheck, Building, Camera, Image as ImageIcon, AlertTriangle,
+  Upload, Send, FileWarning, AlertOctagon, AlertCircle
 } from 'lucide-react';
 import { analyzeMaintenanceRequest } from '../services/geminiService';
 
@@ -15,6 +17,7 @@ interface PropertiesProps {
 }
 
 type SortOption = 'none' | 'rent_asc' | 'rent_desc' | 'location' | 'expiry';
+type NoticeType = 'RENT_INCREASE' | 'QUIT_NOTICE';
 
 const PROPERTY_TYPES: PropertyType[] = [
   'Single Room', 'Self-contained', 'Mini Flat (1 Bedroom)', 
@@ -31,17 +34,90 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [showTenantPicker, setShowTenantPicker] = useState(false);
   const [showMaintenanceForm, setShowMaintenanceForm] = useState(false);
+  const [showMaintenanceList, setShowMaintenanceList] = useState(false);
+  const [showNoticeForm, setShowNoticeForm] = useState(false);
   const [tenantSearch, setTenantSearch] = useState('');
   const [editFormData, setEditFormData] = useState<Partial<Property>>({});
+  
+  // Maintenance State
   const [maintenanceIssue, setMaintenanceIssue] = useState('');
   const [maintenanceImage, setMaintenanceImage] = useState<string | null>(null);
+  
+  // Notice State
+  const [noticeType, setNoticeType] = useState<NoticeType>('RENT_INCREASE');
+  const [noticeMessage, setNoticeMessage] = useState('');
+  const [noticeFile, setNoticeFile] = useState<string | null>(null);
+  const [noticeFileName, setNoticeFileName] = useState<string>('');
+
   const [isSaving, setIsSaving] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('none');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const noticeFileInputRef = useRef<HTMLInputElement>(null);
   const { settings } = store;
+
+  // Initial Notice Template Effect
+  useEffect(() => {
+    if (!selectedProperty) return;
+    const today = new Date().toLocaleDateString();
+    
+    if (noticeType === 'RENT_INCREASE') {
+      setNoticeMessage(`NOTICE OF RENT INCREASE\n\nDate: ${today}\n\nDear Tenant,\n\nPlease be advised that effective from the next renewal cycle, the annual rent for ${selectedProperty.name} will be adjusted. The new rental amount will be [ENTER NEW AMOUNT] due to market adjustments.\n\nKindly acknowledge receipt of this notice.`);
+    } else {
+      setNoticeMessage(`NOTICE TO QUIT\n\nDate: ${today}\n\nDear Tenant,\n\nThis serves as a formal notice to quit and deliver up possession of the premises known as ${selectedProperty.name} by [ENTER DATE].\n\nFailure to comply will lead to legal action for recovery of premises.`);
+    }
+  }, [noticeType, selectedProperty]);
+
+  // Helper for days remaining
+  const getDaysRemaining = (expiryDate?: string) => {
+    if (!expiryDate || expiryDate === '---') return null;
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    const diffTime = expiry.getTime() - today.getTime();
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
+
+  // Automated Expiry Notifications
+  useEffect(() => {
+    if (user.role !== UserRole.AGENT && user.role !== UserRole.ADMIN) return;
+
+    const expiringProps = store.properties.filter(p => {
+        if (p.status !== PropertyStatus.OCCUPIED || !p.rentExpiryDate) return false;
+        const days = getDaysRemaining(p.rentExpiryDate);
+        return days !== null && days <= 30 && days > 0;
+    });
+
+    const newNotifications: Notification[] = [];
+    let stateChanged = false;
+
+    expiringProps.forEach(p => {
+        const notifId = `n_exp_${p.id}_${p.rentExpiryDate}`;
+        const exists = store.notifications.find(n => n.id === notifId);
+        
+        if (!exists) {
+            const days = getDaysRemaining(p.rentExpiryDate!);
+            newNotifications.push({
+                id: notifId,
+                userId: user.id,
+                title: 'Lease Expiry Alert',
+                message: `Lease for ${p.name} is expiring in ${days} days (${formatDate(p.rentExpiryDate!, settings)}). Review renewal options.`,
+                type: NotificationType.WARNING,
+                timestamp: new Date().toISOString(),
+                isRead: false,
+                linkTo: 'properties'
+            });
+            stateChanged = true;
+        }
+    });
+
+    if (stateChanged) {
+        const newState = { ...store, notifications: [...newNotifications, ...store.notifications] };
+        saveStore(newState);
+        setStore(newState);
+    }
+  }, [user.id, user.role]); // Run on mount and user change
 
   const properties = useMemo(() => {
     let list: Property[] = [];
@@ -165,6 +241,17 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     reader.readAsDataURL(file);
   };
 
+  const handleNoticeFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setNoticeFileName(file.name);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setNoticeFile(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSubmitMaintenance = async () => {
     if (!selectedProperty || !maintenanceIssue) return;
     setIsSaving(true);
@@ -208,6 +295,40 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     setMaintenanceImage(null);
   };
 
+  const handleSendNotice = () => {
+    if (!selectedProperty || !selectedProperty.tenantId || !noticeMessage) return;
+    setIsSaving(true);
+
+    setTimeout(() => {
+        const title = noticeType === 'RENT_INCREASE' ? 'Notice: Rent Adjustment' : 'Urgent: Notice to Quit';
+        const type = noticeType === 'RENT_INCREASE' ? NotificationType.INFO : NotificationType.WARNING;
+
+        const notification = {
+            id: `n_notice_${Date.now()}`,
+            userId: selectedProperty.tenantId!,
+            title: title,
+            message: noticeMessage,
+            type: type,
+            timestamp: new Date().toISOString(),
+            isRead: false,
+            linkTo: 'notifications',
+            attachmentUrl: noticeFile || undefined
+        };
+
+        const updatedStore = {
+            ...store,
+            notifications: [notification, ...store.notifications]
+        };
+
+        saveStore(updatedStore);
+        setStore(updatedStore);
+        setIsSaving(false);
+        setShowNoticeForm(false);
+        setNoticeFile(null);
+        setNoticeFileName('');
+    }, 1500);
+  };
+
   const getStatusStyle = (status: PropertyStatus) => {
     switch (status) {
       case PropertyStatus.OCCUPIED: return 'bg-emerald-500 text-white border-emerald-400/50 shadow-emerald-500/20';
@@ -223,6 +344,8 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     setIsEditing(false);
     setShowTenantPicker(false);
     setShowMaintenanceForm(false);
+    setShowMaintenanceList(false);
+    setShowNoticeForm(false);
   };
 
   const handleStartEdit = (e: React.MouseEvent, property: Property) => {
@@ -232,6 +355,8 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     setIsEditing(true);
     setShowTenantPicker(false);
     setShowMaintenanceForm(false);
+    setShowMaintenanceList(false);
+    setShowNoticeForm(false);
   };
 
   const calculateExpiryDate = (startDate: string) => {
@@ -345,6 +470,10 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
           const propertyAgent = store.users.find(u => u.id === property.agentId);
           const activeTickets = store.tickets.filter(t => t.propertyId === property.id && t.status !== TicketStatus.RESOLVED);
           
+          const daysRemaining = getDaysRemaining(property.rentExpiryDate);
+          const isExpiringSoon = daysRemaining !== null && daysRemaining <= 30 && daysRemaining > 0;
+          const isExpired = daysRemaining !== null && daysRemaining <= 0;
+
           return (
             <div 
               key={property.id} 
@@ -397,18 +526,22 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                       <p className="text-xs font-black text-zinc-900 dark:text-white truncate">{property.type}</p>
                     </div>
                     <div className="p-4 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
-                      <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Term</p>
-                      <p className="text-xs font-black text-zinc-900 dark:text-white truncate">Annual (1yr)</p>
-                    </div>
-                    <div className="p-4 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
                       <p className="text-[8px] font-black text-zinc-500 uppercase mb-1 flex items-center gap-1">Start</p>
                       <p className="text-xs font-black text-zinc-900 dark:text-white">{formatDate(property.rentStartDate || '---', settings)}</p>
                     </div>
-                    <div className="p-4 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
-                      <p className="text-[8px] font-black text-zinc-500 uppercase mb-1 flex items-center gap-1">Expiry</p>
-                      <p className="text-xs font-black text-blue-600 dark:text-blue-400">
+                    <div className={`p-4 rounded-2xl border backdrop-blur-sm ${isExpiringSoon ? 'bg-amber-500/10 border-amber-500/30' : isExpired ? 'bg-rose-500/10 border-rose-500/30' : 'border-white/10 bg-white/5'}`}>
+                      <p className={`text-[8px] font-black uppercase mb-1 flex items-center gap-1 ${isExpiringSoon ? 'text-amber-500' : isExpired ? 'text-rose-500' : 'text-zinc-500'}`}>
+                        {isExpiringSoon && <AlertTriangle size={10} />}
+                        {isExpired && <AlertCircle size={10} />}
+                        Expiry
+                      </p>
+                      <p className={`text-xs font-black ${isExpiringSoon ? 'text-amber-600 dark:text-amber-400' : isExpired ? 'text-rose-600 dark:text-rose-400' : 'text-blue-600 dark:text-blue-400'}`}>
                         {formatDate(property.rentExpiryDate || '---', settings)}
                       </p>
+                    </div>
+                    <div className="p-4 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm">
+                      <p className="text-[8px] font-black text-zinc-500 uppercase mb-1">Term</p>
+                      <p className="text-xs font-black text-zinc-900 dark:text-white truncate">Annual</p>
                     </div>
                   </div>
 
@@ -566,6 +699,132 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                        </button>
                     </div>
                   </div>
+                ) : showNoticeForm ? (
+                  <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-4">
+                          <FileWarning className="text-rose-600" size={32} />
+                          <div>
+                             <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">Issue Legal Notice</h2>
+                             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Formal Communication Dispatch</p>
+                          </div>
+                       </div>
+                       <button onClick={() => setShowNoticeForm(false)} className="p-4 bg-white/5 rounded-full text-zinc-400 hover:text-rose-500 transition-all">
+                          <X size={20} />
+                       </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                       <button 
+                          onClick={() => setNoticeType('RENT_INCREASE')}
+                          className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-2 ${noticeType === 'RENT_INCREASE' ? 'bg-blue-600/10 border-blue-600 text-blue-600' : 'bg-white/5 border-transparent text-zinc-500 hover:bg-white/10'}`}
+                       >
+                          <DollarSign size={24} />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Rent Increase</span>
+                       </button>
+                       <button 
+                          onClick={() => setNoticeType('QUIT_NOTICE')}
+                          className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-2 ${noticeType === 'QUIT_NOTICE' ? 'bg-rose-600/10 border-rose-600 text-rose-600' : 'bg-white/5 border-transparent text-zinc-500 hover:bg-white/10'}`}
+                       >
+                          <AlertOctagon size={24} />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Quit Notice</span>
+                       </button>
+                    </div>
+
+                    <div className="space-y-6">
+                       <div className="space-y-4">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Notice Content (Customizable)</label>
+                          <textarea 
+                             className="glass-input w-full p-8 rounded-[2.5rem] h-56 outline-none focus:ring-4 focus:ring-blue-600/10 text-sm font-bold text-zinc-900 dark:text-white resize-none" 
+                             placeholder="Enter official notice message..." 
+                             value={noticeMessage} 
+                             onChange={e => setNoticeMessage(e.target.value)}
+                          />
+                       </div>
+
+                       <div className="space-y-4">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Attach Document (PDF)</label>
+                          <div 
+                             onClick={() => noticeFileInputRef.current?.click()}
+                             className="h-32 rounded-[2rem] bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer overflow-hidden group hover:border-blue-600/40 transition-all"
+                          >
+                             {noticeFile ? (
+                                <div className="text-center">
+                                    <FileText size={32} className="text-emerald-500 mx-auto mb-2" />
+                                    <p className="text-[10px] font-black uppercase text-emerald-500">{noticeFileName || 'Document Attached'}</p>
+                                    <p className="text-[9px] font-bold text-zinc-500 mt-1">Click to replace</p>
+                                </div>
+                             ) : (
+                                <div className="text-center group-hover:scale-110 transition-transform">
+                                   <Upload size={32} className="text-zinc-300 dark:text-zinc-700 mx-auto mb-2" />
+                                   <p className="text-[10px] font-black uppercase text-zinc-400">Upload PDF Document</p>
+                                </div>
+                             )}
+                          </div>
+                          <input type="file" hidden ref={noticeFileInputRef} accept="application/pdf,image/*" onChange={handleNoticeFileUpload} />
+                       </div>
+
+                       <button 
+                          onClick={handleSendNotice}
+                          disabled={isSaving || !noticeMessage}
+                          className="w-full bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-[10px] py-7 rounded-[2.5rem] shadow-2xl shadow-blue-600/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                       >
+                          {isSaving ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                          {isSaving ? 'Dispatching Notice...' : 'Dispatch Legal Notice'}
+                       </button>
+                    </div>
+                  </div>
+                ) : showMaintenanceList ? (
+                  <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
+                    <div className="flex items-center justify-between">
+                       <div className="flex items-center gap-4">
+                          <Wrench className="text-blue-600" size={32} />
+                          <div>
+                             <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">Maintenance Log</h2>
+                             <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">History for {selectedProperty.name}</p>
+                          </div>
+                       </div>
+                       <button onClick={() => setShowMaintenanceList(false)} className="p-4 bg-white/5 rounded-full text-zinc-400 hover:text-rose-500 transition-all">
+                          <X size={20} />
+                       </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        {store.tickets.filter(t => t.propertyId === selectedProperty.id).length > 0 ? (
+                            store.tickets.filter(t => t.propertyId === selectedProperty.id).map(ticket => (
+                                <div key={ticket.id} className="p-6 bg-white/5 border border-white/10 rounded-[2rem] space-y-4">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h4 className="text-lg font-black text-zinc-900 dark:text-white">{ticket.issue}</h4>
+                                            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">{new Date(ticket.createdAt).toLocaleDateString()}</p>
+                                        </div>
+                                        <span className={`px-3 py-1 rounded-xl text-[9px] font-black uppercase ${
+                                            ticket.status === 'RESOLVED' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-blue-600/10 text-blue-600'
+                                        }`}>
+                                            {ticket.status.replace('_', ' ')}
+                                        </span>
+                                    </div>
+                                    {ticket.imageUrl && (
+                                        <div className="h-48 w-full rounded-2xl overflow-hidden cursor-pointer bg-black/20" onClick={() => setExpandedImage(ticket.imageUrl || null)}>
+                                            <img src={ticket.imageUrl} className="w-full h-full object-cover hover:scale-105 transition-transform" alt="Evidence" />
+                                        </div>
+                                    )}
+                                    {ticket.aiAssessment && (
+                                       <div className="p-4 bg-blue-600/5 rounded-2xl border border-blue-600/10">
+                                          <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">AI Assessment</p>
+                                          <p className="text-xs text-zinc-600 dark:text-zinc-400 italic">"{ticket.aiAssessment}"</p>
+                                       </div>
+                                    )}
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-24 border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-[2rem]">
+                                <Wrench className="w-12 h-12 text-zinc-300 dark:text-zinc-700 mx-auto mb-4" />
+                                <p className="text-zinc-400 font-bold uppercase text-[10px] tracking-widest">No maintenance records found.</p>
+                            </div>
+                        )}
+                    </div>
+                  </div>
                 ) : (
                   <>
                     <div className="flex justify-between items-start mb-12">
@@ -588,7 +847,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                         {(user.role === UserRole.AGENT || user.role === UserRole.ADMIN) && !isEditing && (
                             <button 
                                 onClick={() => setIsEditing(true)}
-                                className="p-4 glass-input rounded-full text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all"
+                                className="p-4 glass-input rounded-full text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all border border-white/10"
                             >
                                 <Edit size={20} />
                             </button>
@@ -651,6 +910,38 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                                     <DetailCard icon={Layout} label="Type" value={selectedProperty.type} />
                                     <DetailCard icon={Building} label="Category" value={selectedProperty.category} />
                                     {selectedProperty.rentStartDate && <DetailCard icon={CalendarDays} label="Start" value={formatDate(selectedProperty.rentStartDate, settings)} />}
+                                    {selectedProperty.rentExpiryDate && (
+                                        <div className={`p-8 backdrop-blur-md rounded-[2.5rem] border group hover:border-blue-600 transition-colors shadow-xl ${
+                                            getDaysRemaining(selectedProperty.rentExpiryDate) !== null && getDaysRemaining(selectedProperty.rentExpiryDate)! <= 30 
+                                            ? 'bg-amber-500/5 border-amber-500/20' 
+                                            : 'bg-white/5 border-white/10'
+                                        }`}>
+                                            <div className="flex items-center justify-between mb-4">
+                                                <p className={`text-[10px] font-black uppercase tracking-widest opacity-60 group-hover:opacity-100 transition-opacity ${
+                                                    getDaysRemaining(selectedProperty.rentExpiryDate) !== null && getDaysRemaining(selectedProperty.rentExpiryDate)! <= 30 
+                                                    ? 'text-amber-500' 
+                                                    : 'text-zinc-500 dark:text-zinc-400'
+                                                }`}>Expiry</p>
+                                                {getDaysRemaining(selectedProperty.rentExpiryDate) !== null && getDaysRemaining(selectedProperty.rentExpiryDate)! <= 30 ? (
+                                                    <AlertTriangle className="w-4 h-4 text-amber-500 animate-pulse" />
+                                                ) : (
+                                                    <CalendarRange className="w-4 h-4 text-blue-600" />
+                                                )}
+                                            </div>
+                                            <p className={`text-xl font-black tracking-tighter truncate leading-tight ${
+                                                getDaysRemaining(selectedProperty.rentExpiryDate) !== null && getDaysRemaining(selectedProperty.rentExpiryDate)! <= 30 
+                                                ? 'text-amber-600 dark:text-amber-400' 
+                                                : 'text-zinc-900 dark:text-white'
+                                            }`}>
+                                                {formatDate(selectedProperty.rentExpiryDate, settings)}
+                                            </p>
+                                            {getDaysRemaining(selectedProperty.rentExpiryDate) !== null && getDaysRemaining(selectedProperty.rentExpiryDate)! <= 30 && (
+                                                <p className="text-[9px] font-black text-amber-500 uppercase mt-2">
+                                                    Expires in {getDaysRemaining(selectedProperty.rentExpiryDate)} days
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                                 </>
                             )}
                         </div>
@@ -670,7 +961,13 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                               </div>
                               <div className="text-right">
                                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Lease Expiry</p>
-                                 <p className="text-sm font-black text-rose-500">{formatDate(selectedProperty.rentExpiryDate || '', settings)}</p>
+                                 <p className={`text-sm font-black ${
+                                     getDaysRemaining(selectedProperty.rentExpiryDate) !== null && getDaysRemaining(selectedProperty.rentExpiryDate)! <= 30 
+                                     ? 'text-amber-500' 
+                                     : 'text-rose-500'
+                                 }`}>
+                                     {formatDate(selectedProperty.rentExpiryDate || '', settings)}
+                                 </p>
                               </div>
                            </div>
                         )}
@@ -712,18 +1009,36 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                                 </>
                             ) : (
                                 <>
-                                    {selectedProperty.status !== PropertyStatus.OCCUPIED && (user.role === UserRole.AGENT || user.role === UserRole.ADMIN) ? (
-                                       <button 
-                                          onClick={() => setShowTenantPicker(true)}
-                                          className="flex-1 bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3"
-                                       >
-                                          <UserPlus size={20} /> Initiate Tenancy
-                                       </button>
-                                    ) : (
-                                       <button className="flex-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-400 font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] cursor-not-allowed flex items-center justify-center gap-3">
-                                          <CheckCircle2 size={20} /> Tenancy Locked
-                                       </button>
+                                    {/* Agent Actions */}
+                                    {(user.role === UserRole.AGENT || user.role === UserRole.ADMIN) && (
+                                        <>
+                                            {selectedProperty.status !== PropertyStatus.OCCUPIED ? (
+                                                 <button 
+                                                    onClick={() => setShowTenantPicker(true)}
+                                                    className="flex-1 bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-3"
+                                                 >
+                                                    <UserPlus size={20} /> Initiate Tenancy
+                                                 </button>
+                                            ) : (
+                                                 <div className="flex flex-col sm:flex-row gap-4 w-full">
+                                                     <button 
+                                                        onClick={() => setShowMaintenanceList(true)}
+                                                        className="flex-1 bg-white/10 text-zinc-900 dark:text-white border border-white/20 font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] hover:bg-white/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+                                                     >
+                                                        <Wrench size={20} /> Maintenance
+                                                     </button>
+                                                     <button 
+                                                        onClick={() => setShowNoticeForm(true)}
+                                                        className="flex-1 bg-rose-50 border-2 border-rose-100 text-rose-600 dark:bg-rose-900/10 dark:border-rose-900/30 dark:text-rose-400 font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] hover:bg-rose-100 dark:hover:bg-rose-900/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+                                                     >
+                                                        <FileWarning size={20} /> Legal Notice
+                                                     </button>
+                                                 </div>
+                                            )}
+                                        </>
                                     )}
+
+                                    {/* Tenant Actions */}
                                     {user.assignedPropertyId === selectedProperty.id && (
                                        <button 
                                           onClick={() => setShowMaintenanceForm(true)}

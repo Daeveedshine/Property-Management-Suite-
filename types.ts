@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   AGENT = 'AGENT',
@@ -151,4 +152,5 @@ export interface Notification {
   timestamp: string;
   isRead: boolean;
   linkTo?: string;
+  attachmentUrl?: string;
 }

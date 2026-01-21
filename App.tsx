@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from './types';
 import { getStore, saveStore } from './store';
@@ -97,6 +98,15 @@ const App: React.FC = () => {
     setTheme(savedTheme);
     document.documentElement.classList.toggle('dark', savedTheme === 'dark');
     
+    // Check for Referral Link in URL
+    const params = new URLSearchParams(window.location.search);
+    const refAgentId = params.get('ref');
+    if (refAgentId) {
+      localStorage.setItem('referral_agent_id', refAgentId);
+      // Clean URL without refresh
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     // Initial sync
     syncVisualSettings();
 
@@ -134,7 +144,16 @@ const App: React.FC = () => {
     store.currentUser = loggedUser;
     saveStore(store);
     setUser(loggedUser);
-    setView(loggedUser.role === UserRole.ADMIN ? 'admin_dashboard' : 'dashboard');
+    
+    // Check if there is a pending referral action
+    const pendingReferralId = localStorage.getItem('referral_agent_id');
+    
+    if (pendingReferralId && loggedUser.role === UserRole.TENANT) {
+      setView('applications');
+    } else {
+      setView(loggedUser.role === UserRole.ADMIN ? 'admin_dashboard' : 'dashboard');
+    }
+    
     refreshUnreadCount();
     syncVisualSettings(); // Refresh visual state on login
   };
@@ -170,14 +189,14 @@ const App: React.FC = () => {
   const navItems = [
     { id: 'admin_dashboard', label: 'Admin Panel', icon: Shield, roles: [UserRole.ADMIN] },
     { id: 'dashboard', label: 'Overview', icon: Home, roles: [UserRole.AGENT, UserRole.TENANT] },
-    { id: 'properties', label: 'Properties', icon: Building2, roles: [UserRole.AGENT, UserRole.ADMIN, UserRole.TENANT] },
     { id: 'applications', label: 'Apply Now', icon: UserPlus, roles: [UserRole.TENANT] },
-    { id: 'screenings', label: 'Screenings', icon: ClipboardCheck, roles: [UserRole.AGENT, UserRole.ADMIN] },
-    { id: 'agreements', label: 'Agreements (Soon)', icon: FileText, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
+    { id: 'properties', label: 'Properties', icon: Building2, roles: [UserRole.AGENT, UserRole.ADMIN, UserRole.TENANT] },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
-    { id: 'payments', label: 'Rent & Payments', icon: CreditCard, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
-    { id: 'reports', label: 'Global Registry', icon: Table, roles: [UserRole.AGENT, UserRole.ADMIN] },
     { id: 'notifications', label: 'Notifications', icon: Bell, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN], badge: unreadCount },
+    { id: 'screenings', label: 'Screenings', icon: ClipboardCheck, roles: [UserRole.AGENT, UserRole.ADMIN] },
+    { id: 'reports', label: 'Global Registry', icon: Table, roles: [UserRole.AGENT, UserRole.ADMIN] },
+    { id: 'agreements', label: 'Agreements (Soon)', icon: FileText, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
+    { id: 'payments', label: 'Rent & Payments', icon: CreditCard, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
     { id: 'settings', label: 'Settings', icon: SettingsIcon, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
     { id: 'profile', label: 'My Profile', icon: UserIcon, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
   ];
@@ -237,7 +256,16 @@ const App: React.FC = () => {
             {!isSidebarCollapsed && (
               <div className="mt-4">
                 <h1 className="text-xl md:text-2xl font-bold tracking-tighter text-zinc-900 dark:text-white truncate">SPACEYA</h1>
-                <p className="text-[9px] md:text-[10px] text-zinc-500 dark:text-zinc-400 uppercase mt-1 tracking-[0.3em] font-black opacity-60">Property Manager</p>
+                <div className="flex items-center gap-2 mt-1">
+                   <p className="text-[9px] md:text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-[0.3em] font-black opacity-60">Property Manager</p>
+                   <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                        user.role === UserRole.AGENT ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' :
+                        user.role === UserRole.ADMIN ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' :
+                        'bg-blue-500/10 text-blue-500 border-blue-500/20'
+                      }`}>
+                        {user.role}
+                   </span>
+                </div>
               </div>
             )}
           </div>

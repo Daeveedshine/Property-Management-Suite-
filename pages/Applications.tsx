@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { User, TenantApplication, ApplicationStatus, NotificationType, UserRole, Property, PropertyStatus } from '../types';
 import { getStore, saveStore } from '../store';
 import { 
@@ -8,7 +8,6 @@ import {
   Search, Camera, Fingerprint, 
   Briefcase, Users, Phone, PenTool, Calendar, History, FileText, Eye,
   UserPlus, Download, Trash2, Edit3, Image as ImageIcon, AlertCircle, ChevronDown, User as UserIcon, Printer, X, Maximize2, Check,
-  // Fix: Added missing Info icon import from lucide-react
   Info
 } from 'lucide-react';
 
@@ -30,6 +29,9 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
   const [viewingApp, setViewingApp] = useState<TenantApplication | null>(null);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
+  // Check for Referral Agent ID in storage
+  const referralAgentId = localStorage.getItem('referral_agent_id');
+
   const initialFormData: Partial<TenantApplication> = {
     firstName: '',
     surname: '',
@@ -48,13 +50,20 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
     verificationIdNumber: '',
     verificationUrl: '',
     passportPhotoUrl: '',
-    agentIdCode: '',
+    agentIdCode: referralAgentId || '', // Pre-fill if exists
     propertyId: 'PENDING',
     signature: '',
     applicationDate: new Date().toISOString().split('T')[0]
   };
 
   const [formData, setFormData] = useState<Partial<TenantApplication>>(initialFormData);
+
+  // Auto-fill effect when component mounts or activeTab changes to new
+  useEffect(() => {
+    if (activeTab === 'new' && referralAgentId && !formData.agentIdCode) {
+        setFormData(prev => ({...prev, agentIdCode: referralAgentId}));
+    }
+  }, [activeTab, referralAgentId]);
 
   const myApplications = useMemo(() => {
     return store.applications
@@ -141,6 +150,9 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
       setActiveTab('history');
       setEditingId(null);
       setStep(1);
+      
+      // Keep referral ID in form data for next application if needed, or clear it. 
+      // Generally keeping it helps if they make a mistake and start over.
       setFormData(initialFormData);
     }, 1500);
   };
@@ -178,6 +190,12 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
 
       {activeTab === 'new' ? (
         <div className="space-y-10 print:hidden">
+          {referralAgentId && step === 1 && !editingId && (
+            <div className="bg-blue-600/10 text-blue-600 p-4 rounded-2xl border border-blue-600/20 text-xs font-bold text-center animate-in slide-in-from-top-4">
+                You are applying via a direct referral link. The Agent ID has been pre-filled for you.
+            </div>
+          )}
+          
           <div className="flex gap-2 max-w-sm mx-auto">
               {[1,2,3,4,5].map(i => (
                   <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-700 ${i <= step ? 'bg-blue-600' : 'bg-zinc-200 dark:bg-zinc-800'}`}></div>
@@ -322,7 +340,6 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
                             </div>
                             <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/20">
                                <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-2">
-                                  {/* Fix: Info icon is now imported */}
                                   <Info size={12} /> Asset Routing Note
                                </p>
                                <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400 mt-1">
