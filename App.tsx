@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, TicketStatus, ApplicationStatus } from './types';
-import { getStore, saveStore } from './store';
+import { getStore, saveStore, initFirebaseSync } from './store';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AdminDashboard from './pages/AdminDashboard';
@@ -19,8 +19,9 @@ import Settings from './pages/Settings';
 import { 
   Home, Building2, Wrench, CreditCard, LogOut, Menu, X, Shield, 
   FileText, Bell, Table, Building, ClipboardCheck, UserPlus, 
-  User as UserIcon, Moon, Sun, ChevronLeft, ChevronRight, Settings as SettingsIcon
+  User as UserIcon, Moon, Sun, ChevronLeft, ChevronRight, Settings as SettingsIcon, Cloud
 } from 'lucide-react';
+import { isConfigured } from './firebaseConfig';
 
 export const Logo: React.FC<{ size?: number, className?: string }> = ({ size = 24, className = "" }) => (
   <svg 
@@ -81,6 +82,7 @@ const App: React.FC = () => {
   const [badges, setBadges] = useState({ notifications: 0, maintenance: 0, screenings: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+  const [synced, setSynced] = useState(false);
 
   // Sync Settings Function
   const syncVisualSettings = () => {
@@ -134,6 +136,19 @@ const App: React.FC = () => {
 
     // Initial sync
     syncVisualSettings();
+
+    // Initialize Firebase Sync
+    if (isConfigured) {
+        const unsubscribe = initFirebaseSync((newState) => {
+            // Re-render UI on remote changes if current user is logged in
+            if (store.currentUser) {
+                refreshBadges();
+                setSynced(true);
+                // Force update might be needed in complex apps, but React state change in Dashboard usually handles it via getStore() re-calls
+            }
+        });
+        return () => unsubscribe();
+    }
 
     const timer = setTimeout(() => {
       if (store.currentUser) {
@@ -340,6 +355,12 @@ const App: React.FC = () => {
              >
                {isSidebarCollapsed ? <ChevronRight size={20} /> : <div className="flex items-center gap-2"><ChevronLeft size={20} /><span className="text-[10px] uppercase font-black tracking-widest">Collapse Menu</span></div>}
              </button>
+             
+             {!isSidebarCollapsed && isConfigured && (
+                <div className="flex items-center justify-center gap-2 pt-2 text-[9px] font-black text-emerald-600 uppercase tracking-widest opacity-60">
+                    <Cloud size={10} /> Cloud Sync Active
+                </div>
+             )}
           </div>
         </div>
       </aside>
