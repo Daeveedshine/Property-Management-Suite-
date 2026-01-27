@@ -2,20 +2,20 @@
 import React, { useState, useMemo } from 'react';
 import { User, UserRole, TenantApplication, ApplicationStatus, NotificationType, PropertyStatus, Agreement } from '../types';
 import { getStore, saveStore } from '../store';
-// Added AlertCircle and Loader2 to imports
 import { 
   ClipboardCheck, CheckCircle, XCircle, 
   Search, ChevronRight, ShieldCheck, Mail, Phone, Calendar, Download,
   User as UserIcon, MapPin, Briefcase, Info, Users, Home, Printer, FileText,
-  BadgeCheck, Building, Maximize2, X, RefreshCw, Check, AlertCircle, Loader2
+  BadgeCheck, Building, Maximize2, X, RefreshCw, Check, AlertCircle, Loader2, List
 } from 'lucide-react';
 
 interface ScreeningsProps {
   user: User;
   onNavigate: (view: string) => void;
+  onUpdate?: () => void;
 }
 
-const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
+const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate, onUpdate }) => {
   const [store, setStore] = useState(getStore());
   const [selectedApp, setSelectedApp] = useState<TenantApplication | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -54,6 +54,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
     saveStore(newState);
     setStore(newState);
     setSelectedApp(updatedApps.find(a => a.id === id) || null);
+    if (onUpdate) onUpdate();
   };
 
   const handleRouteProperty = (propertyId: string) => {
@@ -128,6 +129,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
       setSelectedApp(updatedApplications.find(a => a.id === selectedApp.id) || null);
       setIsRouting(false);
       setRoutedPropertyId(null);
+      if (onUpdate) onUpdate();
     }, 1200);
   };
 
@@ -153,7 +155,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 px-1 print:hidden">
         <div>
           <h1 className="text-3xl font-black text-white tracking-tight">Vetting Portal</h1>
-          <p className="text-zinc-500 text-sm font-medium">Verify tenant dossiers and stability ratings.</p>
+          <p className="text-zinc-500 text-sm font-medium">Verify tenant dossiers.</p>
         </div>
         <div className="relative w-full sm:w-auto">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
@@ -192,7 +194,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
         {/* Right Detail View */}
         <div className="lg:col-span-2">
           {selectedApp ? (
-            <div id="printable-dossier" className="bg-white rounded-[4rem] shadow-2xl overflow-hidden border border-zinc-200 animate-in slide-in-from-right-8 duration-700 print:shadow-none print:rounded-none print:border-none print:m-0 print:p-0">
+            <div id="printable-dossier" className="bg-white rounded-[4rem] shadow-2xl overflow-hidden border border-zinc-200 animate-in slide-in-from-right-8 duration-700 print:shadow-none print:rounded-none print:border-none print:m-0 print:p-0 print:overflow-visible print:w-full">
                
                {/* Action Bar for Agents - Hidden on print */}
                <div className="px-10 py-6 bg-zinc-50 border-b border-zinc-100 flex justify-between items-center print:hidden">
@@ -242,14 +244,10 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
                     <div>
                       <h2 className="text-4xl font-black tracking-tighter print:text-black">{selectedApp.firstName} {selectedApp.surname}</h2>
                       <div className="flex items-center gap-4 mt-2">
-                        <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase border ${getStatusStyle(selectedApp.status)}`}>{selectedApp.status}</span>
+                        <span className={`px-4 py-1 rounded-full text-[10px] font-black uppercase border print:border-zinc-300 print:text-black ${getStatusStyle(selectedApp.status)}`}>{selectedApp.status}</span>
                         <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Application Date: {selectedApp.applicationDate}</span>
                       </div>
                     </div>
-                  </div>
-                  <div className="text-center bg-white/5 p-8 rounded-[2.5rem] border border-white/10 shadow-inner min-w-[180px] print:bg-zinc-50 print:border-zinc-200">
-                     <p className="text-[10px] font-black uppercase text-blue-400 mb-2">Security Stability Index</p>
-                     <p className="text-6xl font-black text-emerald-400 print:text-emerald-600">{selectedApp.riskScore}%</p>
                   </div>
                </div>
                
@@ -316,7 +314,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
                   )}
 
                   {/* Section 1: Identity */}
-                  <section className="space-y-10">
+                  <section className="space-y-10 break-inside-avoid">
                     <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.4em] border-b-2 border-zinc-100 pb-4 flex items-center gap-3">
                        <UserIcon size={16} className="text-blue-600" /> 01: Profile Information
                     </h3>
@@ -324,6 +322,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
                       <DetailRow label="Surname" value={selectedApp.surname} />
                       <DetailRow label="First Name" value={selectedApp.firstName} />
                       <DetailRow label="Other Name" value={selectedApp.middleName} />
+                      <DetailRow label="Date of Birth" value={selectedApp.dob} />
                       <DetailRow label="Gender" value={selectedApp.gender} />
                       <DetailRow label="Marital Status" value={selectedApp.maritalStatus} />
                       <DetailRow label="Occupation" value={selectedApp.occupation} />
@@ -333,7 +332,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
                   </section>
 
                   {/* Section 2: Residential History */}
-                  <section className="space-y-10">
+                  <section className="space-y-10 break-inside-avoid">
                     <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.4em] border-b-2 border-zinc-100 pb-4 flex items-center gap-3">
                        <MapPin size={16} className="text-blue-600" /> 02: Residential Analysis
                     </h3>
@@ -348,12 +347,12 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
                   </section>
 
                   {/* Section 3: Verification Evidence */}
-                  <section className="space-y-10 page-break-inside-avoid">
+                  <section className="space-y-10 break-inside-avoid">
                     <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.4em] border-b-2 border-zinc-100 pb-4 flex items-center gap-3">
                        <ShieldCheck size={16} className="text-blue-600" /> 03: Identity Verification
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                       <div className="space-y-8">
+                       <div className="space-y-10">
                           <div className="grid grid-cols-2 gap-6">
                             <DetailRow label="Document Category" value={selectedApp.verificationType} />
                             <DetailRow label="Document Reference" value={selectedApp.verificationIdNumber} />
@@ -366,37 +365,44 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
                              {selectedApp.verificationUrl ? (
                                <img src={selectedApp.verificationUrl} className="w-full h-auto rounded-2xl max-h-64 object-contain shadow-xl print:shadow-none print:border print:border-zinc-200 transition-transform group-hover:scale-[1.02]" alt="ID Document" />
                              ) : (
-                               <div className="py-20 text-center text-zinc-300 italic text-xs">No scan data attached.</div>
+                               <div className="py-24 text-center text-zinc-300 italic text-xs">No scan data attached.</div>
                              )}
                              {selectedApp.verificationUrl && (
-                               <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                               <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center print:hidden">
                                  <Maximize2 size={24} className="text-zinc-500" />
                                </div>
                              )}
                           </div>
                        </div>
                        <div className="p-14 bg-zinc-950 rounded-[4rem] flex flex-col items-center justify-center text-center shadow-2xl print:bg-white print:border-4 print:rounded-none print:border-zinc-200">
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] mb-8 print:text-zinc-400">Digital Legal Authentication</p>
-                          <p className="text-5xl font-serif italic text-white border-b-2 border-zinc-800 pb-6 px-12 print:text-black print:border-zinc-200">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.5em] mb-8 print:text-zinc-400">Dossier Authentication</p>
+                          <p className="text-6xl font-serif italic text-white border-b-2 border-slate-800 pb-6 px-12 print:text-black print:border-slate-100">
                             {selectedApp.signature}
                           </p>
                           <div className="mt-10 flex items-center gap-4 text-emerald-500">
-                             <BadgeCheck size={20} />
-                             <span className="text-[9px] font-black uppercase tracking-[0.3em]">Electronically Verified</span>
+                             <ShieldCheck size={24} />
+                             <span className="text-[10px] font-black uppercase tracking-[0.4em]">Official Timestamp Verified</span>
                           </div>
                        </div>
                     </div>
                   </section>
 
-                  {/* AI Recommendation Briefing */}
-                  <section className="p-8 bg-blue-50 border border-blue-100 rounded-[2.5rem] space-y-4 print:bg-zinc-50 print:border-zinc-200 print:rounded-none">
-                     <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] flex items-center gap-2">
-                       <Info size={14} /> Intelligence Analysis Summary
-                     </h4>
-                     <p className="text-blue-900 font-bold leading-relaxed italic print:text-black">
-                       "{selectedApp.aiRecommendation}"
-                     </p>
-                  </section>
+                  {/* Section 4: Additional / Custom Responses */}
+                  {Object.keys(selectedApp.customResponses || {}).length > 0 && (
+                    <section className="space-y-10 break-inside-avoid">
+                       <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.4em] border-b-2 border-zinc-100 pb-4 flex items-center gap-3">
+                          <List size={16} className="text-blue-600" /> 04: Additional Information
+                       </h3>
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                          {Object.entries(selectedApp.customResponses || {}).map(([key, value]) => {
+                             if (key === 'agentIdCode' || key === 'signature' || typeof value !== 'string') return null;
+                             if (['firstName', 'surname', 'middleName', 'dob', 'maritalStatus', 'gender', 'currentHomeAddress', 'occupation', 'familySize', 'phoneNumber', 'reasonForRelocating', 'currentLandlordName', 'currentLandlordPhone', 'verificationType', 'verificationIdNumber'].includes(key)) return null;
+                             
+                             return <DetailRow key={key} label={key.replace(/([A-Z])/g, ' $1').trim()} value={String(value)} />;
+                          })}
+                       </div>
+                    </section>
+                  )}
 
                   {/* Action Buttons - Hidden on print */}
                   <div className="pt-12 border-t border-zinc-100 flex flex-col sm:flex-row gap-6 print:hidden">
@@ -450,14 +456,17 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
 
       <style>{`
         @media print {
-          /* Force page to use full width and handle colors correctly */
+          @page { 
+            size: A4; 
+            margin: 0; 
+          }
           html, body {
             height: auto !important;
             overflow: visible !important;
             background: white !important;
             color: black !important;
-            padding: 0 !important;
             margin: 0 !important;
+            padding: 0 !important;
           }
           body {
             -webkit-print-color-adjust: exact !important;
@@ -470,17 +479,19 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
           }
           
           /* Main container reset */
-          main {
+          #root, main, .app-container {
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            padding: 0 !important;
             margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            height: auto !important;
             background: white !important;
           }
           
-          .max-w-6xl {
+          .max-w-6xl, .max-w-5xl {
             max-width: 100% !important;
             width: 100% !important;
             margin: 0 !important;
@@ -495,6 +506,9 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
             margin: 0 !important;
             box-shadow: none !important;
             background: white !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
           }
           
           /* Hide list column, show detail column at full width */
@@ -510,21 +524,27 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
             padding: 0 !important;
           }
 
+          /* Content Flow */
+          .space-y-16 {
+            height: auto !important;
+            display: block !important;
+          }
+
           /* Ensure images and borders are retained */
           img {
             max-width: 100% !important;
             height: auto !important;
+            page-break-inside: avoid;
           }
 
           /* Page break handling */
-          section {
+          section, .break-inside-avoid {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
           }
           
-          @page {
-            size: A4;
-            margin: 0;
+          h3, h4 {
+            page-break-after: avoid !important;
           }
         }
       `}</style>
@@ -532,9 +552,9 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate }) => {
   );
 };
 
-const DetailRow = ({ label, value }: { label: string, value: any }) => (
-  <div className="min-w-0">
-    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1 truncate">{label}</p>
+const DetailRow: React.FC<{ label: string; value: any }> = ({ label, value }) => (
+  <div className="min-w-0 mb-6 print:mb-4">
+    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em] leading-none mb-2 truncate print:text-zinc-600">{label}</p>
     <p className="text-lg font-bold text-black leading-tight break-words">{value || 'N/A'}</p>
   </div>
 );

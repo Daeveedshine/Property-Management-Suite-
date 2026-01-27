@@ -78,6 +78,31 @@ export interface Property {
   rentExpiryDate?: string;
 }
 
+export type FieldType = 'text' | 'number' | 'date' | 'select' | 'textarea' | 'file' | 'email' | 'tel';
+
+export interface FormField {
+  id: string;
+  key: string; // Map to TenantApplication properties (e.g., 'firstName') or custom IDs
+  label: string;
+  type: FieldType;
+  required: boolean;
+  options?: string[]; // For select inputs
+  placeholder?: string;
+}
+
+export interface FormSection {
+  id: string;
+  title: string;
+  icon: string; // Lucide icon name
+  fields: FormField[];
+}
+
+export interface FormTemplate {
+  agentId: string;
+  sections: FormSection[];
+  lastUpdated: string;
+}
+
 export interface TenantApplication {
   id: string;
   userId: string;
@@ -86,12 +111,13 @@ export interface TenantApplication {
   status: ApplicationStatus;
   submissionDate: string;
   
+  // Core Fields (Mapped from Dynamic Form)
   firstName: string;
   surname: string;
   middleName: string;
   dob: string;
-  maritalStatus: 'Single' | 'Married' | 'Divorced' | 'Widow' | 'Widower' | 'Separated';
-  gender: 'Male' | 'Female';
+  maritalStatus: string;
+  gender: string;
   currentHomeAddress: string;
   occupation: string;
   familySize: number;
@@ -99,7 +125,7 @@ export interface TenantApplication {
   reasonForRelocating: string;
   currentLandlordName: string;
   currentLandlordPhone: string;
-  verificationType: 'NIN' | 'Passport' | "Voter's Card" | "Driver's License";
+  verificationType: string;
   verificationIdNumber: string;
   verificationUrl?: string;
   passportPhotoUrl?: string;
@@ -107,6 +133,9 @@ export interface TenantApplication {
   signature: string;
   applicationDate: string;
   
+  // Custom Dynamic Data
+  customResponses?: Record<string, any>; // Key: Field ID, Value: User Input
+
   riskScore: number;
   aiRecommendation: string;
 }

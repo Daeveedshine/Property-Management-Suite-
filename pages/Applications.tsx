@@ -1,69 +1,166 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { User, TenantApplication, ApplicationStatus, NotificationType, UserRole, Property, PropertyStatus } from '../types';
+import { User, TenantApplication, ApplicationStatus, NotificationType, UserRole, FormTemplate, FormSection, FormField, FieldType } from '../types';
 import { getStore, saveStore } from '../store';
 import { 
   CheckCircle, ArrowRight, ArrowLeft, Building, ShieldCheck, 
-  Loader2, MapPin, UserCheck, 
-  Search, Camera, Fingerprint, 
+  Loader2, MapPin, UserCheck, Search, Camera, Fingerprint, 
   Briefcase, Users, Phone, PenTool, Calendar, History, FileText, Eye,
   UserPlus, Download, Trash2, Edit3, Image as ImageIcon, AlertCircle, ChevronDown, User as UserIcon, Printer, X, Maximize2, Check,
-  Info
+  Info, Settings, Plus, GripVertical, Save
 } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { jsPDF } from 'jspdf';
+
+const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <div className="space-y-6 break-inside-avoid">
+     <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.4em] border-b border-zinc-100 dark:border-zinc-800 pb-2">{title}</h3>
+     {children}
+  </div>
+);
+
+const PrintRow: React.FC<{ label: string; value: any }> = ({ label, value }) => (
+  <div className="mb-4">
+    <p className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1 truncate">{label}</p>
+    <p className="text-sm font-bold text-zinc-900 dark:text-white leading-tight break-words">{value || 'N/A'}</p>
+  </div>
+);
 
 interface ApplicationsProps {
   user: User;
   onNavigate: (view: string) => void;
+  onUpdate?: () => void;
 }
 
-const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
-  const store = getStore();
+const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate, onUpdate }) => {
+  const [store, setStore] = useState(getStore());
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const passportInputRef = useRef<HTMLInputElement>(null);
   
-  const [activeTab, setActiveTab] = useState<'new' | 'history'>('new');
-  const [step, setStep] = useState(1);
+  // Views: 'gate' | 'form' | 'history'
+  const [viewMode, setViewMode] = useState<'gate' | 'form' | 'history'>('gate');
+  
+  // Tenant State
+  const [targetAgentId, setTargetAgentId] = useState(localStorage.getItem('referral_agent_id') || '');
+  const [targetAgent, setTargetAgent] = useState<User | null>(null);
+  const [activeTemplate, setActiveTemplate] = useState<FormTemplate | null>(null);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [formData, setFormData] = useState<Record<string, any>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [printApp, setPrintApp] = useState<TenantApplication | null>(null);
+  const [isSearchingAgent, setIsSearchingAgent] = useState(false);
   const [viewingApp, setViewingApp] = useState<TenantApplication | null>(null);
-  const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
 
-  // Check for Referral Agent ID in storage
-  const referralAgentId = localStorage.getItem('referral_agent_id');
+  // Check for referral on mount
+  useEffect(() => {
+    if (targetAgentId) {
+      validateAgent(targetAgentId);
+    }
+  }, []);
 
-  const initialFormData: Partial<TenantApplication> = {
-    firstName: '',
-    surname: '',
-    middleName: '',
-    dob: '',
-    maritalStatus: 'Single',
-    gender: 'Male',
-    currentHomeAddress: '',
-    occupation: '',
-    familySize: 1,
-    phoneNumber: user.phone || '',
-    reasonForRelocating: '',
-    currentLandlordName: '',
-    currentLandlordPhone: '',
-    verificationType: 'NIN',
-    verificationIdNumber: '',
-    verificationUrl: '',
-    passportPhotoUrl: '',
-    agentIdCode: referralAgentId || '', // Pre-fill if exists
-    propertyId: 'PENDING',
-    signature: '',
-    applicationDate: new Date().toISOString().split('T')[0]
+  const validateAgent = (id: string) => {
+    setIsSearchingAgent(true);
+    setTimeout(() => {
+      const agent = store.users.find(u => u.id.toLowerCase() === id.toLowerCase() && u.role === UserRole.AGENT);
+      if (agent) {
+        setTargetAgent(agent);
+        const template = store.formTemplates.find(t => t.agentId === agent.id) || store.formTemplates.find(t => t.agentId === 'u1');
+        setActiveTemplate(template || null);
+        setViewMode('form');
+        
+        // Pre-fill Agent ID in form data implicitly
+        setFormData(prev => ({ ...prev, agentIdCode: agent.id }));
+      } else {
+        // Allow fallback or show error
+        setTargetAgent(null);
+      }
+      setIsSearchingAgent(false);
+    }, 600);
   };
 
-  const [formData, setFormData] = useState<Partial<TenantApplication>>(initialFormData);
+  const handleInputChange = (key: string, value: any) => {
+    setFormData(prev => ({ ...prev, [key]: value }));
+  };
 
-  // Auto-fill effect when component mounts or activeTab changes to new
-  useEffect(() => {
-    if (activeTab === 'new' && referralAgentId && !formData.agentIdCode) {
-        setFormData(prev => ({...prev, agentIdCode: referralAgentId}));
-    }
-  }, [activeTab, referralAgentId]);
+  const handleFileUpload = (key: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      handleInputChange(key, reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // --- TENANT SUBMISSION LOGIC ---
+
+  const handleSubmitApplication = () => {
+    setIsSubmitting(true);
+    
+    // Default values (AI disabled)
+    const score = 0;
+    const recommendation = "";
+
+    setTimeout(() => {
+      // Map form data to standard fields where possible, put rest in customResponses
+      const appRecord: TenantApplication = {
+        id: `app${Date.now()}`,
+        userId: user.id,
+        propertyId: 'PENDING',
+        agentId: targetAgent?.id || 'u1',
+        status: ApplicationStatus.PENDING,
+        submissionDate: new Date().toISOString(),
+        
+        // Standard Mapping (fallback to formData if keys match)
+        firstName: formData.firstName || '',
+        surname: formData.surname || '',
+        middleName: formData.middleName || '',
+        dob: formData.dob || '',
+        maritalStatus: formData.maritalStatus || 'Single',
+        gender: formData.gender || 'Male',
+        currentHomeAddress: formData.currentHomeAddress || '',
+        occupation: formData.occupation || '',
+        familySize: Number(formData.familySize) || 1,
+        phoneNumber: formData.phoneNumber || '',
+        reasonForRelocating: formData.reasonForRelocating || '',
+        currentLandlordName: formData.currentLandlordName || '',
+        currentLandlordPhone: formData.currentLandlordPhone || '',
+        verificationType: formData.verificationType || '',
+        verificationIdNumber: formData.verificationIdNumber || '',
+        verificationUrl: formData.verificationUrl,
+        passportPhotoUrl: formData.passportPhotoUrl,
+        agentIdCode: targetAgent?.id || '',
+        signature: formData.signature || '',
+        applicationDate: formData.applicationDate || new Date().toISOString().split('T')[0],
+        
+        riskScore: score,
+        aiRecommendation: recommendation,
+        customResponses: formData
+      };
+
+      const newState = {
+        ...store,
+        applications: [...store.applications, appRecord],
+        notifications: [{
+          id: `n_app_${Date.now()}`,
+          userId: appRecord.agentId,
+          title: 'New Tenancy Application',
+          message: `A new candidate has submitted a dossier via your custom form.`,
+          type: NotificationType.INFO,
+          timestamp: new Date().toISOString(),
+          isRead: false,
+          linkTo: 'screenings'
+        }, ...store.notifications]
+      };
+
+      saveStore(newState);
+      setStore(newState); // Local update
+      setIsSubmitting(false);
+      setViewMode('history');
+      setFormData({});
+      setCurrentStepIndex(0);
+      if (onUpdate) onUpdate();
+    }, 1500);
+  };
 
   const myApplications = useMemo(() => {
     return store.applications
@@ -71,564 +168,388 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate }) => {
       .sort((a, b) => new Date(b.submissionDate).getTime() - new Date(a.submissionDate).getTime());
   }, [store.applications, user.id]);
 
-  const targetAgent = useMemo(() => {
-    if (!formData.agentIdCode) return null;
-    return store.users.find(u => 
-      u.role === UserRole.AGENT && 
-      (u.id.toLowerCase() === formData.agentIdCode?.toLowerCase() || 
-       u.name.toLowerCase().includes(formData.agentIdCode?.toLowerCase() || ''))
-    );
-  }, [store.users, formData.agentIdCode]);
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, field: 'verificationUrl' | 'passportPhotoUrl') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setFormData(prev => ({ ...prev, [field]: reader.result as string }));
-    };
-    reader.readAsDataURL(file);
+  const handleDownloadPDF = async (app: TenantApplication) => {
+    // If not currently viewing, view it first to render the DOM
+    if (!viewingApp || viewingApp.id !== app.id) {
+        setViewingApp(app);
+        // Wait for render
+        setTimeout(() => generatePDF(app), 500);
+        return;
+    }
+    generatePDF(app);
   };
 
-  const handleEdit = (app: TenantApplication) => {
-    setFormData({ ...app });
-    setEditingId(app.id);
-    setStep(1);
-    setActiveTab('new');
-    setViewingApp(null);
+  const generatePDF = async (app: TenantApplication) => {
+    setIsDownloading(true);
+    const input = document.getElementById('printable-content');
+    if (!input) {
+        setIsDownloading(false);
+        return;
+    }
+
+    try {
+        const canvas = await html2canvas(input, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            useCORS: true
+        });
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+
+        const imgWidth = 210;
+        const pageHeight = 297;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft >= 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+        }
+
+        pdf.save(`SPACEYA_Application_${app.id}.pdf`);
+    } catch (err) {
+        console.error("PDF Generation failed", err);
+    } finally {
+        setIsDownloading(false);
+    }
   };
 
-  const handleSubmit = async () => {
-    setIsSubmitting(true);
-    
-    const score = editingId ? (formData.riskScore || 70) : (60 + Math.floor(Math.random() * 35));
-    const recommendation = editingId ? (formData.aiRecommendation || "Updated Dossier") : (score > 80 
-      ? "AI Analysis: High stability profile detected. Verified identity and stable occupation history. Recommended for lifecycle enrollment."
-      : "AI Analysis: Standard profile. Manual verification of landlord reference recommended.");
+  // --- RENDERERS ---
 
-    setTimeout(() => {
-      let updatedApplications;
-      const finalAgentId = targetAgent?.id || 'u1';
-
-      const applicationRecord: TenantApplication = {
-        id: editingId || `app${Date.now()}`,
-        userId: user.id,
-        propertyId: formData.propertyId || 'PENDING',
-        agentId: finalAgentId, 
-        status: ApplicationStatus.PENDING,
-        submissionDate: new Date().toISOString(),
-        ...formData,
-        riskScore: score,
-        aiRecommendation: recommendation
-      } as TenantApplication;
-
-      if (editingId) {
-        updatedApplications = store.applications.map(app => 
-          app.id === editingId ? applicationRecord : app
-        );
-      } else {
-        updatedApplications = [...store.applications, applicationRecord];
-      }
-
-      const newState = { 
-        ...store, 
-        applications: updatedApplications,
-        notifications: [{
-          id: `n_app_${Date.now()}`,
-          userId: finalAgentId,
-          title: editingId ? 'Dossier Updated' : 'New Tenancy Application',
-          message: `${formData.firstName} ${formData.surname} has ${editingId ? 'updated' : 'submitted'} a tenancy dossier.`,
-          type: NotificationType.INFO,
-          timestamp: new Date().toISOString(),
-          isRead: false,
-          linkTo: 'screenings'
-        }, ...store.notifications]
-      };
-      
-      saveStore(newState);
-      setIsSubmitting(false);
-      setActiveTab('history');
-      setEditingId(null);
-      setStep(1);
-      
-      // Keep referral ID in form data for next application if needed, or clear it. 
-      // Generally keeping it helps if they make a mistake and start over.
-      setFormData(initialFormData);
-    }, 1500);
-  };
-
-  const nextStep = () => setStep(s => s + 1);
-  const prevStep = () => setStep(s => s - 1);
-
-  const handleDownload = (app: TenantApplication) => {
-    setPrintApp(app);
-    setTimeout(() => {
-      window.print();
-      setPrintApp(null);
-    }, 100);
-  };
-
-  return (
-    <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in duration-500 pb-20 print:p-0">
-      <header className="text-center space-y-6 print:hidden">
-        <h1 className="text-4xl font-black text-zinc-900 dark:text-white tracking-tighter uppercase">Tenancy Application Form</h1>
-        <div className="flex justify-center p-1.5 bg-white dark:bg-zinc-900 rounded-3xl w-fit mx-auto border border-zinc-100 dark:border-zinc-800 shadow-sm">
-           <button 
-             onClick={() => { setActiveTab('new'); setStep(1); setEditingId(null); setFormData(initialFormData); }} 
-             className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'new' ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-500 hover:text-blue-600'}`}
-           >
-             <UserPlus className="inline-block mr-2 w-4 h-4" /> {editingId ? 'Editing Form' : 'Start Enrollment'}
-           </button>
-           <button 
-             onClick={() => setActiveTab('history')} 
-             className={`px-8 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-blue-600 text-white shadow-lg' : 'text-zinc-500 hover:text-blue-600'}`}
-           >
-             <History className="inline-block mr-2 w-4 h-4" /> Submitted Dossiers
-           </button>
-        </div>
-      </header>
-
-      {activeTab === 'new' ? (
-        <div className="space-y-10 print:hidden">
-          {referralAgentId && step === 1 && !editingId && (
-            <div className="bg-blue-600/10 text-blue-600 p-4 rounded-2xl border border-blue-600/20 text-xs font-bold text-center animate-in slide-in-from-top-4">
-                You are applying via a direct referral link. The Agent ID has been pre-filled for you.
+  if (viewMode === 'gate') {
+    return (
+      <div className="h-full flex flex-col items-center justify-center space-y-8 pb-20 animate-in fade-in zoom-in-95 duration-500">
+         <div className="bg-white dark:bg-zinc-900 p-10 md:p-14 rounded-[3.5rem] shadow-2xl border border-zinc-100 dark:border-zinc-800 max-w-lg w-full text-center space-y-8">
+            <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center mx-auto text-white shadow-xl shadow-blue-600/20">
+               <ShieldCheck size={40} />
             </div>
-          )}
-          
-          <div className="flex gap-2 max-w-sm mx-auto">
-              {[1,2,3,4,5].map(i => (
-                  <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-700 ${i <= step ? 'bg-blue-600' : 'bg-zinc-200 dark:bg-zinc-800'}`}></div>
-              ))}
-          </div>
+            <div>
+               <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">Agent Verification</h2>
+               <p className="text-zinc-500 font-medium mt-2 text-sm">Enter the unique ID of your leasing agent to access their specific enrollment form.</p>
+            </div>
+            <div className="relative">
+               <UserCheck className="absolute left-6 top-1/2 -translate-y-1/2 text-zinc-400" />
+               <input 
+                 className="w-full pl-14 pr-6 py-6 bg-offwhite dark:bg-black border border-zinc-200 dark:border-zinc-800 rounded-3xl text-lg font-bold text-center tracking-widest outline-none focus:ring-2 focus:ring-blue-600 transition-all"
+                 placeholder="AGENT ID (e.g. u1)"
+                 value={targetAgentId}
+                 onChange={(e) => setTargetAgentId(e.target.value)}
+                 onKeyDown={(e) => e.key === 'Enter' && validateAgent(targetAgentId)}
+               />
+            </div>
+            <button 
+              onClick={() => validateAgent(targetAgentId)}
+              disabled={isSearchingAgent || !targetAgentId}
+              className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-[0.2em] text-xs shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+            >
+               {isSearchingAgent ? <Loader2 className="animate-spin" /> : <ArrowRight />}
+               {isSearchingAgent ? 'Verifying...' : 'Access Form'}
+            </button>
+            <div className="pt-6 border-t border-zinc-100 dark:border-zinc-800">
+               <button onClick={() => setViewMode('history')} className="text-zinc-400 font-bold text-xs hover:text-blue-600 transition-colors uppercase tracking-widest">
+                  View My Submitted Dossiers
+               </button>
+            </div>
+         </div>
+      </div>
+    );
+  }
 
-          <div className="bg-white dark:bg-zinc-900 p-8 md:p-14 rounded-[3.5rem] border border-zinc-100 dark:border-zinc-800 shadow-2xl">
-            {step === 1 && (
-               <div className="space-y-10 animate-in slide-in-from-right-4 duration-500">
-                   <div className="flex items-center gap-4 text-blue-600">
-                       <UserIcon size={32} />
-                       <h3 className="text-2xl font-black">{editingId ? 'Modify Identity' : 'Identity Credentials'}</h3>
-                   </div>
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                       <InputGroup label="Surname" value={formData.surname!} onChange={v => setFormData({...formData, surname: v})} />
-                       <InputGroup label="First Name" value={formData.firstName!} onChange={v => setFormData({...formData, firstName: v})} />
-                       <InputGroup label="Other Names" value={formData.middleName!} onChange={v => setFormData({...formData, middleName: v})} />
-                   </div>
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-4">
-                      <InputGroup label="Date of Birth" type="date" value={formData.dob!} onChange={v => setFormData({...formData, dob: v})} />
-                      <SelectGroup label="Biological Gender" value={formData.gender!} options={['Male', 'Female']} onChange={v => setFormData({...formData, gender: v as any})} />
-                      <SelectGroup label="Marital Status" value={formData.maritalStatus!} options={['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated']} onChange={v => setFormData({...formData, maritalStatus: v as any})} />
-                   </div>
-                   <button onClick={nextStep} className="w-full bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] shadow-xl shadow-blue-600/20 transform active:scale-95 transition-all">Next: Professional Status <ArrowRight size={18} className="inline ml-2" /></button>
+  if (viewMode === 'form' && activeTemplate) {
+    const currentSection = activeTemplate.sections[currentStepIndex];
+    const isLastStep = currentStepIndex === activeTemplate.sections.length - 1;
+
+    return (
+      <div className="max-w-4xl mx-auto space-y-10 animate-in fade-in duration-500 pb-20">
+         <div className="flex items-center justify-between">
+            <button onClick={() => setViewMode('gate')} className="p-3 bg-white dark:bg-zinc-900 rounded-2xl hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors">
+               <ArrowLeft size={20} className="text-zinc-500" />
+            </button>
+            <div className="text-center">
+               <h2 className="text-lg font-black text-zinc-900 dark:text-white uppercase tracking-tighter">Application for {targetAgent?.name}</h2>
+               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Step {currentStepIndex + 1} of {activeTemplate.sections.length}</p>
+            </div>
+            <div className="w-12"></div>
+         </div>
+
+         {/* Progress Bar */}
+         <div className="flex gap-2">
+            {activeTemplate.sections.map((_, idx) => (
+               <div key={idx} className={`h-1.5 flex-1 rounded-full transition-all duration-700 ${idx <= currentStepIndex ? 'bg-blue-600' : 'bg-zinc-200 dark:bg-zinc-800'}`} />
+            ))}
+         </div>
+
+         <div className="bg-white dark:bg-zinc-900 p-8 md:p-14 rounded-[3.5rem] border border-zinc-100 dark:border-zinc-800 shadow-2xl">
+            <div className="space-y-10 animate-in slide-in-from-right-4 duration-500 key={currentStepIndex}">
+               <div className="flex items-center gap-4 text-blue-600">
+                  <FileText size={32} />
+                  <h3 className="text-2xl font-black">{currentSection.title}</h3>
                </div>
-            )}
 
-            {step === 2 && (
-               <div className="space-y-10 animate-in slide-in-from-right-4 duration-500">
-                   <div className="flex items-center gap-4 text-blue-600">
-                       <Briefcase size={32} />
-                       <h3 className="text-2xl font-black">Professional & Contact</h3>
-                   </div>
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                       <InputGroup label="Current Occupation" value={formData.occupation!} onChange={v => setFormData({...formData, occupation: v})} />
-                       <InputGroup label="Family Size" type="number" value={formData.familySize!} onChange={v => setFormData({...formData, familySize: parseInt(v)})} />
-                       <InputGroup label="Phone Number" value={formData.phoneNumber!} onChange={v => setFormData({...formData, phoneNumber: v})} />
-                   </div>
-                   <div className="flex gap-4">
-                      <button onClick={prevStep} className="flex-1 bg-offwhite py-6 rounded-3xl font-black uppercase text-[10px] text-zinc-400">Back</button>
-                      <button onClick={nextStep} className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] shadow-xl">Next: Residential History <ArrowRight size={18} className="inline ml-2" /></button>
-                   </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {currentSection.fields.map(field => (
+                     <div key={field.id} className={field.type === 'textarea' || field.type === 'file' ? 'col-span-1 md:col-span-2' : 'col-span-1'}>
+                        <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">
+                           {field.label} {field.required && <span className="text-rose-500">*</span>}
+                        </label>
+                        
+                        {field.type === 'textarea' ? (
+                           <textarea 
+                              className="glass-input w-full p-6 rounded-[2rem] text-sm font-bold h-32 resize-none outline-none focus:ring-2 focus:ring-blue-600"
+                              value={formData[field.key] || ''}
+                              onChange={(e) => handleInputChange(field.key, e.target.value)}
+                              placeholder={field.placeholder || ''}
+                           />
+                        ) : field.type === 'select' ? (
+                           <div className="relative">
+                              <select 
+                                 className="glass-input w-full p-6 rounded-[2rem] text-sm font-bold appearance-none outline-none focus:ring-2 focus:ring-blue-600"
+                                 value={formData[field.key] || ''}
+                                 onChange={(e) => handleInputChange(field.key, e.target.value)}
+                              >
+                                 <option value="">Select Option...</option>
+                                 {field.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                              </select>
+                              <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" size={18} />
+                           </div>
+                        ) : field.type === 'file' ? (
+                           <div 
+                              onClick={() => document.getElementById(`file-${field.id}`)?.click()}
+                              className="h-48 rounded-[2.5rem] bg-offwhite dark:bg-black border-2 border-dashed border-zinc-200 dark:border-zinc-800 flex flex-col items-center justify-center cursor-pointer group hover:border-blue-600/30 transition-all overflow-hidden"
+                           >
+                              {formData[field.key] ? (
+                                 <img src={formData[field.key]} className="w-full h-full object-cover" alt="Uploaded" />
+                              ) : (
+                                 <div className="text-center group-hover:scale-110 transition-transform">
+                                    <Camera size={32} className="text-zinc-300 mx-auto mb-2" />
+                                    <p className="text-[9px] font-black uppercase text-zinc-400">Click to Upload</p>
+                                 </div>
+                              )}
+                              <input 
+                                 type="file" 
+                                 id={`file-${field.id}`} 
+                                 hidden 
+                                 accept="image/*" 
+                                 onChange={(e) => handleFileUpload(field.key, e)} 
+                              />
+                           </div>
+                        ) : (
+                           <input 
+                              type={field.type}
+                              className="glass-input w-full p-6 rounded-[2rem] text-sm font-bold outline-none focus:ring-2 focus:ring-blue-600"
+                              value={formData[field.key] || ''}
+                              onChange={(e) => handleInputChange(field.key, e.target.value)}
+                              placeholder={field.placeholder || ''}
+                           />
+                        )}
+                     </div>
+                  ))}
                </div>
-            )}
 
-            {step === 3 && (
-               <div className="space-y-10 animate-in slide-in-from-right-4 duration-500">
-                   <div className="flex items-center gap-4 text-blue-600">
-                       <MapPin size={32} />
-                       <h3 className="text-2xl font-black">Residential History</h3>
-                   </div>
-                   <InputGroup label="Current House Address" isTextArea value={formData.currentHomeAddress!} onChange={v => setFormData({...formData, currentHomeAddress: v})} />
-                   <InputGroup label="Reason for Relocation" isTextArea value={formData.reasonForRelocating!} onChange={v => setFormData({...formData, reasonForRelocating: v})} />
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                       <InputGroup label="Name of Current Landlord" value={formData.currentLandlordName!} onChange={v => setFormData({...formData, currentLandlordName: v})} />
-                       <InputGroup label="Landlord Phone Number" value={formData.currentLandlordPhone!} onChange={v => setFormData({...formData, currentLandlordPhone: v})} />
-                   </div>
-                   <div className="flex gap-4">
-                      <button onClick={prevStep} className="flex-1 bg-offwhite py-6 rounded-3xl font-black uppercase text-[10px] text-zinc-400">Back</button>
-                      <button onClick={nextStep} className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] shadow-xl">Next: Residential History <ArrowRight size={18} className="inline ml-2" /></button>
-                   </div>
+               <div className="flex gap-4 pt-6 border-t border-zinc-100 dark:border-zinc-800">
+                  {currentStepIndex > 0 && (
+                     <button onClick={() => setCurrentStepIndex(prev => prev - 1)} className="flex-1 bg-offwhite dark:bg-zinc-800 py-6 rounded-[2rem] font-black uppercase text-[10px] text-zinc-400">Back</button>
+                  )}
+                  {isLastStep ? (
+                     <button 
+                        onClick={handleSubmitApplication}
+                        disabled={isSubmitting}
+                        className="flex-[2] bg-blue-600 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-xl shadow-blue-600/20 flex items-center justify-center gap-3 disabled:opacity-50"
+                     >
+                        {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle size={20} />}
+                        Submit Application
+                     </button>
+                  ) : (
+                     <button onClick={() => setCurrentStepIndex(prev => prev + 1)} className="flex-[2] bg-blue-600 text-white py-6 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-xl shadow-blue-600/20 flex items-center justify-center gap-3">
+                        Next Step <ArrowRight size={18} />
+                     </button>
+                  )}
                </div>
-            )}
+            </div>
+         </div>
+      </div>
+    );
+  }
 
-            {step === 4 && (
-               <div className="space-y-10 animate-in slide-in-from-right-4 duration-500">
-                   <div className="flex items-center gap-4 text-blue-600">
-                       <ShieldCheck size={32} />
-                       <h3 className="text-2xl font-black">Identity Verification</h3>
-                   </div>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                       <SelectGroup label="Select ID Type" value={formData.verificationType!} options={['NIN', "Voter's Card", 'Passport', 'Drivers License']} onChange={v => setFormData({...formData, verificationType: v as any})} />
-                       <InputGroup label="ID Number" value={formData.verificationIdNumber!} onChange={v => setFormData({...formData, verificationIdNumber: v})} />
-                   </div>
-                   
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
-                      <div className="space-y-4">
-                         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Photo of Valid ID</label>
-                         <div 
-                           onClick={() => fileInputRef.current?.click()}
-                           className="h-48 rounded-3xl bg-offwhite dark:bg-black border-2 border-dashed border-zinc-100 flex flex-col items-center justify-center cursor-pointer overflow-hidden group"
-                         >
-                            {formData.verificationUrl ? (
-                               <img src={formData.verificationUrl} className="w-full h-full object-cover" />
-                            ) : (
-                               <div className="text-center group-hover:scale-110 transition-transform">
-                                  <ImageIcon size={32} className="text-zinc-300 mx-auto mb-2" />
-                                  <p className="text-[9px] font-black uppercase text-zinc-400">Click to Upload ID</p>
-                               </div>
-                            )}
-                         </div>
-                         <input type="file" hidden ref={fileInputRef} accept="image/*" onChange={e => handleFileUpload(e, 'verificationUrl')} />
-                      </div>
+  // History View (Tenant Viewing Previous Submissions)
+  return (
+    <div className="space-y-6 print:hidden-container">
+      <div className="flex items-center justify-between mb-8 print:hidden">
+         <h1 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">My Submissions</h1>
+         <button onClick={() => setViewMode('gate')} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-2 shadow-xl active:scale-95 transition-all">
+            <Plus size={16} /> New Application
+         </button>
+      </div>
 
-                      <div className="space-y-4">
-                         <label className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Passport Photo</label>
-                         <div 
-                           onClick={() => passportInputRef.current?.click()}
-                           className="h-48 rounded-3xl bg-offwhite dark:bg-black border-2 border-dashed border-zinc-100 flex flex-col items-center justify-center cursor-pointer overflow-hidden group"
-                         >
-                            {formData.passportPhotoUrl ? (
-                               <img src={formData.passportPhotoUrl} className="w-full h-full object-cover" />
-                            ) : (
-                               <div className="text-center group-hover:scale-110 transition-transform">
-                                  <Camera size={32} className="text-zinc-300 mx-auto mb-2" />
-                                  <p className="text-[9px] font-black uppercase text-zinc-400">Upload Portrait</p>
-                               </div>
-                            )}
-                         </div>
-                         <input type="file" hidden ref={passportInputRef} accept="image/*" onChange={e => handleFileUpload(e, 'passportPhotoUrl')} />
-                      </div>
-                   </div>
-
-                   <div className="flex gap-4">
-                      <button onClick={prevStep} className="flex-1 bg-offwhite py-6 rounded-3xl font-black uppercase text-[10px] text-zinc-400">Back</button>
-                      <button onClick={nextStep} className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] shadow-xl">Next: Final Authorization <ArrowRight size={18} className="inline ml-2" /></button>
-                   </div>
-               </div>
-            )}
-
-            {step === 5 && (
-               <div className="space-y-10 animate-in slide-in-from-right-4 duration-500">
-                   <div className="flex items-center gap-4 text-blue-600">
-                       <PenTool size={32} />
-                       <h3 className="text-2xl font-black">Final Authorization</h3>
-                   </div>
-                   
-                   <div className="p-8 bg-offwhite dark:bg-black rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800">
-                      <div className="flex items-center gap-4 mb-6 text-zinc-500">
-                         <UserCheck size={20} />
-                         <span className="text-xs font-bold uppercase tracking-widest">Target Agent Routing</span>
-                      </div>
-                      <InputGroup label="Agent ID / Unique Code" value={formData.agentIdCode!} onChange={v => setFormData({...formData, agentIdCode: v})} placeholder="Enter official Agent ID..." />
-                      {targetAgent ? (
-                         <div className="mt-4 flex flex-col gap-6 animate-in fade-in">
-                            <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded-2xl">
-                               <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-black text-xs">{targetAgent.name.charAt(0)}</div>
-                               <div className="text-[10px]">
-                                  <p className="font-black uppercase">Recipient Verified</p>
-                                  <p className="font-bold opacity-70">{targetAgent.name} • Registry ID: {targetAgent.id}</p>
-                               </div>
-                            </div>
-                            <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-2xl border border-amber-100 dark:border-amber-900/20">
-                               <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest flex items-center gap-2">
-                                  <Info size={12} /> Asset Routing Note
-                               </p>
-                               <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400 mt-1">
-                                  The agent will allocate an available property from their inventory once your vetting is successful.
-                               </p>
-                            </div>
-                         </div>
-                      ) : formData.agentIdCode && (
-                        <p className="mt-2 text-[10px] text-zinc-400 font-bold ml-1 italic">Dossier will be routed to general registry for manual allocation.</p>
-                      )}
-                   </div>
-
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                       <InputGroup label="Digital Signature (Full Legal Name)" value={formData.signature!} onChange={v => setFormData({...formData, signature: v})} />
-                       <InputGroup label="Application Date" type="date" value={formData.applicationDate!} onChange={v => setFormData({...formData, applicationDate: v})} />
-                   </div>
-
-                   <div className="flex gap-4">
-                      <button onClick={prevStep} className="flex-1 bg-offwhite py-6 rounded-3xl font-black uppercase text-[10px] text-zinc-400">Back</button>
-                      <button 
-                        onClick={handleSubmit} 
-                        disabled={isSubmitting || !formData.signature}
-                        className="flex-[2] bg-blue-600 text-white py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] shadow-xl shadow-blue-600/20 flex items-center justify-center gap-3 disabled:opacity-50"
-                      >
-                         {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : <CheckCircle size={20} />}
-                         {isSubmitting ? 'Securing Dossier...' : (editingId ? 'Seal Updates' : 'Seal Application & Submit')}
-                      </button>
-                   </div>
-               </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6 print:hidden">
-          {myApplications.length > 0 ? (
-            myApplications.map(app => (
-              <div key={app.id} className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800 flex flex-col md:flex-row items-center justify-between shadow-sm group hover:border-blue-200 transition-all gap-6">
-                <div className="flex items-center gap-6 flex-1">
-                    <div className="w-20 h-20 bg-offwhite dark:bg-black rounded-3xl flex items-center justify-center overflow-hidden border border-zinc-50 dark:border-zinc-800 shadow-xl">
-                      {app.passportPhotoUrl ? (
-                         <img src={app.passportPhotoUrl} className="w-full h-full object-cover" />
-                      ) : (
-                         <span className="font-black text-blue-600 text-xl">{app.firstName.charAt(0)}</span>
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="text-2xl font-black text-zinc-900 dark:text-white leading-tight">{app.firstName} {app.surname}</h4>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mt-1">{app.status} • Filed: {new Date(app.submissionDate).toLocaleDateString()}</p>
-                      <div className="mt-2 flex items-center gap-4">
-                         <span className="text-[9px] font-black text-emerald-500 uppercase">Risk Index: {app.riskScore}%</span>
-                         <span className="text-[9px] font-black text-blue-600 uppercase">Status: {app.status}</span>
-                      </div>
-                    </div>
+      {myApplications.length > 0 ? (
+        myApplications.map(app => (
+          <div key={app.id} className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800 flex flex-col md:flex-row items-center justify-between shadow-sm group hover:border-blue-200 transition-all gap-6 print:hidden">
+            <div className="flex items-center gap-6 flex-1">
+                <div className="w-20 h-20 bg-offwhite dark:bg-black rounded-3xl flex items-center justify-center overflow-hidden border border-zinc-50 dark:border-zinc-800 shadow-xl">
+                  {app.passportPhotoUrl ? (
+                     <img src={app.passportPhotoUrl} className="w-full h-full object-cover" alt="Profile" />
+                  ) : (
+                     <span className="font-black text-blue-600 text-xl">{app.firstName.charAt(0)}</span>
+                  )}
                 </div>
-                <div className="flex items-center gap-3 w-full md:w-auto">
-                    {app.status === ApplicationStatus.PENDING && (
-                      <button 
-                        onClick={() => handleEdit(app)}
-                        title="Edit Submission"
-                        className="flex-1 md:flex-none p-5 bg-blue-600/10 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm flex items-center justify-center gap-2 font-black uppercase text-[10px] tracking-widest"
-                      >
-                        <Edit3 size={20} /> <span className="md:hidden lg:inline">Edit Dossier</span>
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => handleDownload(app)}
-                      className="flex-1 md:flex-none p-5 bg-offwhite dark:bg-black rounded-2xl text-zinc-400 hover:text-blue-600 hover:bg-white transition-all shadow-sm flex items-center justify-center gap-3 group"
-                    >
-                      <Download size={20} /> <span className="text-[9px] font-black uppercase tracking-widest hidden lg:inline">Download Record</span>
-                    </button>
-                    <button 
-                      onClick={() => setViewingApp(app)}
-                      className="flex-1 md:flex-none p-5 bg-offwhite dark:bg-black rounded-2xl text-zinc-400 hover:text-blue-600 transition-all shadow-sm flex items-center justify-center"
-                    >
-                      <Eye size={20} />
-                    </button>
+                <div>
+                  <h4 className="text-2xl font-black text-zinc-900 dark:text-white leading-tight">{app.firstName} {app.surname}</h4>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400 mt-1">{app.status} • Filed: {new Date(app.submissionDate).toLocaleDateString()}</p>
+                  <div className="mt-2 flex items-center gap-4">
+                     <span className="text-[9px] font-black text-emerald-500 uppercase">Risk Index: {app.riskScore}%</span>
+                     <span className="text-[9px] font-black text-blue-600 uppercase">Status: {app.status}</span>
+                  </div>
                 </div>
-              </div>
-            ))
-          ) : (
-            <div className="bg-white dark:bg-zinc-900 p-16 rounded-[4rem] border-2 border-dashed border-zinc-100 dark:border-zinc-800 text-center space-y-8 shadow-sm">
-                <div className="w-24 h-24 bg-offwhite dark:bg-black rounded-full flex items-center justify-center mx-auto shadow-xl">
-                   <FileText size={40} className="text-zinc-200" />
-                </div>
-                <div className="space-y-2">
-                   <h3 className="text-2xl font-black text-zinc-900 dark:text-white">Submission History Empty</h3>
-                   <p className="text-zinc-400 text-sm max-w-xs mx-auto font-medium">No tenancy dossiers found on your registry. Begin your enrollment process to start a new lifecycle.</p>
-                </div>
+            </div>
+            <div className="flex items-center gap-3 w-full md:w-auto">
                 <button 
-                  onClick={() => { setActiveTab('new'); setStep(1); }}
-                  className="bg-blue-600 text-white px-12 py-5 rounded-3xl font-black uppercase tracking-widest text-[10px] shadow-2xl shadow-blue-600/20 active:scale-95 transition-all"
+                  onClick={() => setViewingApp(app)}
+                  className="flex-1 md:flex-none p-5 bg-offwhite dark:bg-black rounded-2xl text-zinc-400 hover:text-blue-600 hover:bg-white transition-all shadow-sm flex items-center justify-center gap-3 group"
                 >
-                  Start Filling Form Now
+                  <Eye size={20} /> <span className="text-[9px] font-black uppercase tracking-widest hidden lg:inline">View</span>
+                </button>
+                <button 
+                  onClick={() => handleDownloadPDF(app)}
+                  disabled={isDownloading}
+                  className="flex-1 md:flex-none p-5 bg-offwhite dark:bg-black rounded-2xl text-zinc-400 hover:text-blue-600 hover:bg-white transition-all shadow-sm flex items-center justify-center gap-3 group disabled:opacity-50"
+                >
+                  {isDownloading ? <Loader2 size={20} className="animate-spin" /> : <Download size={20} />} 
+                  <span className="text-[9px] font-black uppercase tracking-widest hidden lg:inline">{isDownloading ? 'Downloading...' : 'Download PDF'}</span>
                 </button>
             </div>
-          )}
+          </div>
+        ))
+      ) : (
+        <div className="bg-white dark:bg-zinc-900 p-16 rounded-[4rem] border-2 border-dashed border-zinc-100 dark:border-zinc-800 text-center space-y-8 shadow-sm print:hidden">
+            <div className="w-24 h-24 bg-offwhite dark:bg-black rounded-full flex items-center justify-center mx-auto shadow-xl">
+               <FileText size={40} className="text-zinc-200" />
+            </div>
+            <div className="space-y-2">
+               <h3 className="text-2xl font-black text-zinc-900 dark:text-white">Submission History Empty</h3>
+               <p className="text-zinc-400 text-sm max-w-xs mx-auto font-medium">No tenancy dossiers found on your registry. Begin your enrollment process to start a new lifecycle.</p>
+            </div>
         </div>
       )}
 
-      {/* VIEW MODAL */}
+      {/* VIEW MODAL (On Screen & Download Source) */}
       {viewingApp && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-0 md:p-4 bg-white/95 backdrop-blur-xl animate-in fade-in duration-300">
-           <div className="bg-white dark:bg-zinc-900 w-full max-w-6xl md:rounded-[3rem] shadow-2xl border border-zinc-100 dark:border-zinc-800 flex flex-col h-full md:h-auto md:max-h-[95vh] overflow-hidden">
-              <header className="p-6 md:p-8 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-offwhite dark:bg-black shrink-0">
-                 <div className="flex items-center gap-4 md:gap-6">
-                    <div className="w-10 h-10 md:w-14 md:h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-lg md:text-xl">SY</div>
-                    <div>
-                       <h2 className="text-lg md:text-2xl font-black text-zinc-900 dark:text-white tracking-tighter">APPLICATION DOSSIER</h2>
-                       <p className="text-[8px] md:text-[9px] font-black uppercase tracking-[0.3em] text-blue-600">Review Mode • {viewingApp.id}</p>
-                    </div>
-                 </div>
-                 <div className="flex items-center gap-2 md:gap-4">
-                    {viewingApp.status === ApplicationStatus.PENDING && (
-                      <button onClick={() => handleEdit(viewingApp)} className="hidden sm:flex p-3 md:p-4 bg-blue-600 text-white rounded-xl md:rounded-2xl border border-blue-600/20 shadow-xl items-center gap-2 font-black uppercase text-[9px] md:text-[10px] tracking-widest hover:scale-105 transition-all">
-                        <Edit3 size={16} /> Edit Dossier
-                      </button>
-                    )}
-                    <button onClick={() => setViewingApp(null)} className="p-2 md:p-4 bg-offwhite dark:bg-black rounded-full text-zinc-400 hover:text-rose-500 transition-colors">
-                       <X size={24} />
-                    </button>
-                 </div>
-              </header>
-
-              <div className="flex-1 overflow-y-auto p-6 md:p-14 custom-scrollbar">
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-16 mb-12 md:mb-16">
-                    <div className="col-span-1 space-y-4">
-                       <div 
-                         onClick={() => viewingApp.passportPhotoUrl && setExpandedImage(viewingApp.passportPhotoUrl)}
-                         className="relative w-full aspect-[4/5] overflow-hidden rounded-3xl md:rounded-[2.5rem] shadow-2xl border-4 border-white dark:border-zinc-800 bg-zinc-100 group cursor-pointer"
-                       >
-                          <img src={viewingApp.passportPhotoUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" alt="Passport" />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                             <Maximize2 className="text-white" size={32} />
-                          </div>
-                       </div>
-                    </div>
-                    <div className="col-span-1 md:col-span-2 space-y-8 md:space-y-12">
-                       <div className="flex flex-wrap items-center gap-4 md:gap-8">
-                          <div className="flex-1 min-w-[200px]">
-                            <h3 className="text-3xl md:text-5xl font-black text-zinc-900 dark:text-white tracking-tighter leading-none mb-2">{viewingApp.firstName} {viewingApp.surname}</h3>
-                            <div className="flex items-center gap-4">
-                               <span className="px-4 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-600 text-[10px] font-black uppercase rounded-full border border-blue-100 dark:border-blue-800">{viewingApp.status}</span>
-                               <span className="text-[10px] text-zinc-400 font-black uppercase tracking-widest">Submitted: {new Date(viewingApp.submissionDate).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                          <div className="bg-emerald-50 dark:bg-emerald-900/20 p-6 md:p-8 rounded-3xl border border-emerald-100 dark:border-emerald-800 text-center shrink-0">
-                             <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase mb-1">Stability Rating</p>
-                             <p className="text-4xl md:text-5xl font-black text-emerald-600 dark:text-emerald-400">{viewingApp.riskScore}%</p>
-                          </div>
-                       </div>
-                       
-                       <section className="grid grid-cols-2 lg:grid-cols-3 gap-6 md:gap-10">
-                          <PrintRow label="Surname" value={viewingApp.surname} />
-                          <PrintRow label="First Name" value={viewingApp.firstName} />
-                          <PrintRow label="Middle Names" value={viewingApp.middleName} />
-                          <PrintRow label="Date of Birth" value={viewingApp.dob} />
-                          <PrintRow label="Gender" value={viewingApp.gender} />
-                          <PrintRow label="Marital Status" value={viewingApp.maritalStatus} />
-                       </section>
-                    </div>
-                 </div>
-
-                 <div className="space-y-12 md:space-y-16">
-                    <section className="space-y-8">
-                       <h3 className="text-[9px] md:text-[10px] font-black text-zinc-400 uppercase tracking-[0.4em] border-b border-zinc-100 dark:border-zinc-800 pb-4 flex items-center gap-2"><Briefcase size={14}/> Professional & Contact Details</h3>
-                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 md:gap-10 p-8 md:p-12 bg-offwhite dark:bg-black rounded-3xl md:rounded-[2.5rem] border border-zinc-100 dark:border-zinc-800">
-                          <PrintRow label="Occupation" value={viewingApp.occupation} />
-                          <PrintRow label="Family Size" value={viewingApp.familySize} />
-                          <PrintRow label="Primary Mobile" value={viewingApp.phoneNumber} />
-                       </div>
-                    </section>
-
-                    <section className="space-y-8">
-                       <h3 className="text-[9px] md:text-[10px] font-black text-zinc-400 uppercase tracking-[0.4em] border-b border-zinc-100 dark:border-zinc-800 pb-4 flex items-center gap-2"><MapPin size={14}/> Residential History</h3>
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-10">
-                          <PrintRow label="Current House Address" value={viewingApp.currentHomeAddress} />
-                          <PrintRow label="Reason for Relocation" value={viewingApp.reasonForRelocating} />
-                       </div>
-                    </section>
-
-                    <section className="p-8 md:p-12 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-3xl md:rounded-[2.5rem]">
-                       <div className="flex items-center gap-3 mb-4">
-                          <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white"><AlertCircle size={18}/></div>
-                          <h4 className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest">Intelligence Portfolio Briefing</h4>
-                       </div>
-                       <p className="text-sm md:text-base font-bold text-zinc-700 dark:text-zinc-300 leading-relaxed italic">
-                         "{viewingApp.aiRecommendation}"
-                       </p>
-                    </section>
-
-                    <footer className="pt-8 md:pt-12 border-t border-zinc-100 dark:border-zinc-800 flex flex-col md:flex-row justify-between items-start md:items-end gap-10">
-                       <div className="w-full md:w-auto">
-                          <p className="text-[9px] md:text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">Dossier Authorization Signature</p>
-                          <div className="p-6 md:p-10 bg-offwhite dark:bg-black rounded-3xl border border-zinc-50 dark:border-zinc-800">
-                             <p className="text-3xl md:text-5xl font-serif italic text-zinc-900 dark:text-white pb-2 tracking-tight">{viewingApp.signature}</p>
-                             <div className="mt-4 flex items-center gap-2 text-emerald-500 font-black text-[9px] uppercase tracking-widest">
-                                <CheckCircle size={14}/> Sealed via Digital Fingerprint
-                             </div>
-                          </div>
-                       </div>
-                    </footer>
-                 </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* LIGHTBOX / IMAGE EXPANDER */}
-      {expandedImage && (
-        <div 
-          className="fixed inset-0 z-[150] bg-black/95 backdrop-blur-3xl flex items-center justify-center p-4 md:p-10 animate-in fade-in zoom-in-95 duration-300"
-          onClick={() => setExpandedImage(null)}
-        >
-           <button 
-             className="absolute top-8 right-8 p-4 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
-             onClick={(e) => { e.stopPropagation(); setExpandedImage(null); }}
-           >
-              <X size={32} />
-           </button>
-           <div className="relative w-full h-full flex items-center justify-center" onClick={e => e.stopPropagation()}>
-              <img 
-                src={expandedImage} 
-                className="max-w-full max-h-full object-contain rounded-2xl shadow-[0_0_100px_rgba(37,99,235,0.2)]" 
-                alt="Expanded View"
-              />
-           </div>
-        </div>
-      )}
-
-      {/* PRINT-ONLY Dossier Layout */}
-      {printApp && (
-        <div className="hidden print:block fixed inset-0 bg-white z-[99999] p-20 text-black">
-          {/* Print content remains same as previous */}
-          <div className="flex justify-between items-center border-b-8 border-blue-600 pb-12 mb-12">
-             <div className="flex items-center gap-6">
-                <div className="w-20 h-20 bg-blue-600 flex items-center justify-center text-white rounded-2xl font-black text-3xl">SY</div>
-                <div>
-                   <h1 className="text-4xl font-black tracking-tighter">TENANCY APPLICATION RECORD</h1>
-                   <p className="text-xs font-bold uppercase tracking-[0.4em] text-blue-600">Official Lifecycle Dossier</p>
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-zinc-900 w-full max-w-4xl max-h-[90vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col border border-zinc-200 dark:border-zinc-800 relative">
+             <div className="p-8 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-black/50">
+                <div className="flex items-center gap-4">
+                   <div className="w-12 h-12 bg-blue-600/10 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400">
+                      <FileText size={24} />
+                   </div>
+                   <div>
+                      <h3 className="text-xl font-black text-zinc-900 dark:text-white">Application Details</h3>
+                      <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Dossier ID: {viewingApp.id}</p>
+                   </div>
+                </div>
+                <div className="flex gap-3">
+                   <button 
+                     onClick={() => handleDownloadPDF(viewingApp)} 
+                     disabled={isDownloading}
+                     className="bg-zinc-900 dark:bg-white text-white dark:text-black px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:opacity-80 transition-all disabled:opacity-50"
+                   >
+                      {isDownloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} 
+                      Download PDF
+                   </button>
+                   <button 
+                     onClick={() => setViewingApp(null)} 
+                     className="bg-zinc-200 dark:bg-zinc-800 p-3 rounded-xl text-zinc-500 hover:text-rose-500 transition-all"
+                   >
+                      <X size={20} />
+                   </button>
                 </div>
              </div>
-             <div className="text-right">
-                <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">System Reference</p>
-                <p className="font-mono text-sm font-bold">{printApp.id}</p>
+             
+             {/* Printable/Viewable Content Area */}
+             <div id="printable-content" className="p-10 overflow-y-auto custom-scrollbar space-y-12 bg-white dark:bg-zinc-900 text-black dark:text-white">
+                <div className="flex flex-col md:flex-row gap-8 items-center border-b border-zinc-100 dark:border-zinc-800 pb-10">
+                   <div className="w-24 h-24 bg-zinc-100 dark:bg-black rounded-3xl overflow-hidden border-2 border-zinc-200 dark:border-zinc-800">
+                      {viewingApp.passportPhotoUrl ? (
+                        <img src={viewingApp.passportPhotoUrl} className="w-full h-full object-cover" alt="Profile" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-300 text-3xl font-black">
+                          {viewingApp.firstName.charAt(0)}
+                        </div>
+                      )}
+                   </div>
+                   <div className="text-center md:text-left">
+                      <h2 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">{viewingApp.firstName} {viewingApp.surname}</h2>
+                      <div className="flex items-center justify-center md:justify-start gap-4 mt-2">
+                        <span className="px-4 py-1 rounded-full text-[10px] font-black uppercase bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">{viewingApp.status}</span>
+                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Date: {new Date(viewingApp.submissionDate).toLocaleDateString()}</span>
+                      </div>
+                   </div>
+                </div>
+
+                <Section title="01: Registry Information">
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                      <PrintRow label="Surname" value={viewingApp.surname} />
+                      <PrintRow label="First Name" value={viewingApp.firstName} />
+                      <PrintRow label="Other Name" value={viewingApp.middleName} />
+                      <PrintRow label="Date of Birth" value={viewingApp.dob} />
+                      <PrintRow label="Gender" value={viewingApp.gender} />
+                      <PrintRow label="Marital Status" value={viewingApp.maritalStatus} />
+                      <PrintRow label="Occupation" value={viewingApp.occupation} />
+                      <PrintRow label="Phone" value={viewingApp.phoneNumber} />
+                      <PrintRow label="Family Size" value={viewingApp.familySize} />
+                   </div>
+                </Section>
+
+                <Section title="02: Residential Analysis">
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <PrintRow label="Current Address" value={viewingApp.currentHomeAddress} />
+                      <PrintRow label="Relocation Reason" value={viewingApp.reasonForRelocating} />
+                      <PrintRow label="Landlord" value={viewingApp.currentLandlordName} />
+                      <PrintRow label="Landlord Phone" value={viewingApp.currentLandlordPhone} />
+                   </div>
+                </Section>
+
+                <Section title="03: Verification Dossier">
+                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <PrintRow label="ID Type" value={viewingApp.verificationType} />
+                      <PrintRow label="ID Number" value={viewingApp.verificationIdNumber} />
+                   </div>
+                   {/* URL and Image removed from Tenant View per request */}
+                </Section>
+
+                {/* Dynamic Sections */}
+                {Object.keys(viewingApp.customResponses || {}).length > 0 && (
+                  <Section title="04: Additional Information">
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        {Object.entries(viewingApp.customResponses || {}).map(([key, value]) => {
+                           if (key === 'agentIdCode' || key === 'signature' || typeof value !== 'string') return null;
+                           if (['firstName', 'surname', 'middleName', 'dob', 'maritalStatus', 'gender', 'currentHomeAddress', 'occupation', 'familySize', 'phoneNumber', 'reasonForRelocating', 'currentLandlordName', 'currentLandlordPhone', 'verificationType', 'verificationIdNumber'].includes(key)) return null;
+                           
+                           return <PrintRow key={key} label={key.replace(/([A-Z])/g, ' $1').trim()} value={String(value)} />;
+                        })}
+                     </div>
+                  </Section>
+                )}
+
+                <div className="pt-8 border-t border-zinc-100 dark:border-zinc-800 text-center">
+                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-4">Dossier Authentication</p>
+                    <p className="text-4xl font-serif italic text-zinc-900 dark:text-white mb-2">{viewingApp.signature}</p>
+                    <p className="text-[8px] font-bold text-zinc-300 uppercase tracking-widest">Digital Signature Verified • {viewingApp.applicationDate}</p>
+                </div>
              </div>
           </div>
-          {/* ... Rest of print content ... */}
         </div>
       )}
-
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .print\\:block, .print\\:block * { visibility: visible; }
-          .print\\:block { position: absolute; left: 0; top: 0; width: 100%; }
-        }
-      `}</style>
     </div>
   );
 };
-
-const InputGroup = ({ label, value, onChange, type = 'text', placeholder = '', isTextArea = false }: any) => (
-  <div className="space-y-2">
-    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">{label}</label>
-    {isTextArea ? (
-      <textarea className="w-full px-6 py-5 bg-offwhite dark:bg-black border border-zinc-100 dark:border-zinc-800 rounded-2xl text-sm font-bold text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-600 outline-none transition-all resize-none h-32" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
-    ) : (
-      <input type={type} className="w-full px-6 py-5 bg-offwhite dark:bg-black border border-zinc-100 dark:border-zinc-800 rounded-2xl text-sm font-bold text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-600 outline-none transition-all" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
-    )}
-  </div>
-);
-
-const SelectGroup = ({ label, value, options, onChange }: any) => (
-  <div className="space-y-2">
-    <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2 ml-1">{label}</label>
-    <div className="relative">
-      <select className="w-full px-6 py-5 bg-offwhite dark:bg-black border border-zinc-100 dark:border-zinc-800 rounded-2xl text-sm font-bold text-zinc-900 dark:text-white focus:ring-2 focus:ring-blue-600 outline-none transition-all appearance-none cursor-pointer" value={value} onChange={e => onChange(e.target.value)}>
-        {options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-      </select>
-      <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" size={18} />
-    </div>
-  </div>
-);
-
-const PrintRow = ({ label, value }: { label: string, value: any }) => (
-  <div className="min-w-0">
-    <p className="text-[9px] md:text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">{label}</p>
-    <p className="text-base md:text-lg font-bold text-zinc-900 dark:text-white leading-tight break-words">{value || 'N/A'}</p>
-  </div>
-);
 
 export default Applications;

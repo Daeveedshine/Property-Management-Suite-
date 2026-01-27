@@ -1,14 +1,15 @@
+
 import React, { useState, useRef } from 'react';
 import { User, UserRole, MaintenanceTicket, TicketStatus, TicketPriority, NotificationType } from '../types';
 import { getStore, saveStore } from '../store';
 import { Plus, CheckCircle2, Clock, AlertCircle, Wrench, X, ChevronDown, Camera, Image as ImageIcon, Sparkles, Loader2, Maximize2, Building } from 'lucide-react';
-import { analyzeMaintenanceRequest } from '../services/geminiService';
 
 interface MaintenanceProps {
   user: User;
+  onUpdate?: () => void;
 }
 
-const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
+const Maintenance: React.FC<MaintenanceProps> = ({ user, onUpdate }) => {
   const [store, setStore] = useState(getStore());
   const [tickets, setTickets] = useState<MaintenanceTicket[]>(
     user.role === UserRole.AGENT || user.role === UserRole.ADMIN
@@ -19,7 +20,6 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
   const [newIssue, setNewIssue] = useState('');
   const [newImage, setNewImage] = useState<string | null>(null);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -35,10 +35,10 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
 
   const handleSubmit = async () => {
     if (!newIssue) return;
-    setIsAnalyzing(true);
+    setIsSubmitting(true);
     
-    // AI Assessment Trigger
-    const aiRes = await analyzeMaintenanceRequest(newIssue);
+    // Standard Triage (Defaulting to Medium without AI)
+    const priority = TicketPriority.MEDIUM;
 
     setTimeout(() => {
       const freshTicket: MaintenanceTicket = {
@@ -47,10 +47,10 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
         tenantId: user.id,
         issue: newIssue,
         status: TicketStatus.OPEN,
-        priority: (aiRes.priority as TicketPriority) || TicketPriority.MEDIUM,
+        priority: priority,
         createdAt: new Date().toISOString(),
         imageUrl: newImage || undefined,
-        aiAssessment: aiRes.assessment
+        aiAssessment: undefined
       };
 
       const property = store.properties.find(p => p.id === freshTicket.propertyId);
@@ -74,7 +74,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
       setNewIssue('');
       setNewImage(null);
       setIsSubmitting(false);
-      setIsAnalyzing(false);
+      if (onUpdate) onUpdate();
     }, 1000);
   };
 
@@ -99,6 +99,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
     saveStore(newState);
     setStore(newState);
     setTickets(user.role === UserRole.TENANT ? updatedTickets.filter(t => t.tenantId === user.id) : updatedTickets);
+    if (onUpdate) onUpdate();
   };
 
   return (
@@ -119,7 +120,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
       </header>
 
       {isSubmitting && (
-        <div className="bg-white dark:bg-zinc-900 p-8 md:p-12 rounded-[3.5rem] border border-zinc-100 dark:border-white/10 shadow-2xl animate-in zoom-in-95">
+        <div className="bg-white dark:bg-zinc-900 p-8 md:p-12 rounded-[3.5rem] border border-zinc-100 dark:border-zinc-800 shadow-2xl animate-in zoom-in-95">
           <div className="flex justify-between items-center mb-8">
             <h3 className="font-black text-2xl text-zinc-900 dark:text-white">New Maintenance Log</h3>
             <button onClick={() => setIsSubmitting(false)} className="text-zinc-400 hover:text-rose-500 p-2">
@@ -160,11 +161,11 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
           <div className="flex flex-col sm:flex-row gap-4 mt-12 pt-8 border-t border-zinc-100 dark:border-zinc-800">
             <button 
               onClick={handleSubmit} 
-              disabled={!newIssue || isAnalyzing} 
+              disabled={!newIssue} 
               className="flex-[2] bg-blue-600 text-white px-8 py-6 rounded-[2rem] font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-100 dark:shadow-none active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
             >
-               {isAnalyzing ? <Loader2 className="animate-spin" size={20} /> : <Wrench size={20} className="hover:rotate-45" />}
-               {isAnalyzing ? 'Analyzing Issue...' : 'Submit Maintenance Log'}
+               <Wrench size={20} className="hover:rotate-45" />
+               Submit Maintenance Log
             </button>
             <button onClick={() => setIsSubmitting(false)} className="flex-1 text-zinc-400 font-black uppercase tracking-widest text-xs px-4 bg-offwhite dark:bg-zinc-800 rounded-[2rem] hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors">Discard</button>
           </div>
@@ -207,18 +208,6 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user }) => {
                      <Building size={12} className="text-blue-600" /> {property?.name || 'Unknown Unit'} • {new Date(ticket.createdAt).toLocaleDateString()}
                    </p>
                 </div>
-
-                {ticket.aiAssessment && (
-                   <div className="p-6 bg-blue-600/5 border border-blue-600/10 rounded-3xl flex items-start gap-4">
-                      <div className="p-2 bg-blue-600 rounded-xl text-white shrink-0">
-                         <Sparkles size={16} />
-                      </div>
-                      <div>
-                         <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest mb-1">AI Lifecycle Triage</p>
-                         <p className="text-[11px] font-bold text-zinc-600 dark:text-zinc-400 leading-relaxed italic">"{ticket.aiAssessment}"</p>
-                      </div>
-                   </div>
-                )}
               </div>
 
               {(user.role === UserRole.AGENT || user.role === UserRole.ADMIN) && (

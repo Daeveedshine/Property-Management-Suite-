@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { User, TenantApplication, ApplicationStatus } from '../types';
 import { getStore } from '../store';
@@ -26,12 +27,6 @@ const AdminApplications: React.FC<AdminApplicationsProps> = ({ user, onBack }) =
 
   const handleExportPDF = () => {
     window.print();
-  };
-
-  const getRiskColor = (score: number) => {
-    if (score >= 80) return 'text-emerald-500';
-    if (score >= 50) return 'text-amber-500';
-    return 'text-rose-500';
   };
 
   const getStatusStyle = (status: ApplicationStatus) => {
@@ -79,7 +74,6 @@ const AdminApplications: React.FC<AdminApplicationsProps> = ({ user, onBack }) =
               <tr className="bg-black text-[10px] font-black text-zinc-500 uppercase tracking-[0.25em] border-b border-zinc-800">
                 <th className="px-8 py-6">Applicant Dossier</th>
                 <th className="px-8 py-6">Target Property</th>
-                <th className="px-8 py-6 text-center">Stability Index</th>
                 <th className="px-8 py-6 text-right">Actions</th>
               </tr>
             </thead>
@@ -112,12 +106,6 @@ const AdminApplications: React.FC<AdminApplicationsProps> = ({ user, onBack }) =
                       ) : (
                         <p className="text-xs font-black uppercase tracking-widest italic opacity-40 text-zinc-600">Unallocated</p>
                       )}
-                    </td>
-                    <td className="px-8 py-5">
-                      <div className="flex items-center justify-center gap-3">
-                        <TrendingUp size={16} className={getRiskColor(app.riskScore)} />
-                        <span className={`text-sm font-black ${getRiskColor(app.riskScore)}`}>{app.riskScore}%</span>
-                      </div>
                     </td>
                     <td className="px-8 py-5 text-right">
                       <button 
@@ -180,10 +168,6 @@ const AdminApplications: React.FC<AdminApplicationsProps> = ({ user, onBack }) =
                         <span className="flex items-center gap-3 uppercase tracking-widest text-[10px]"><Calendar size={18} className="text-blue-500" /> Submitted: {selectedApp.applicationDate}</span>
                       </div>
                     </div>
-                 </div>
-                 <div className="bg-white/5 p-10 rounded-[3rem] text-center min-w-[200px] shadow-inner print:bg-zinc-50 print:border-2">
-                   <p className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em] mb-3">Stability Rating</p>
-                   <p className={`text-7xl font-black ${getRiskColor(selectedApp.riskScore)}`}>{selectedApp.riskScore}%</p>
                  </div>
                </div>
              </div>

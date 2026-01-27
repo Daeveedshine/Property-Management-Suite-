@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, UserRole } from './types';
+import { User, UserRole, TicketStatus, ApplicationStatus } from './types';
 import { getStore, saveStore } from './store';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -78,7 +78,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<string>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [badges, setBadges] = useState({ notifications: 0, maintenance: 0, screenings: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
@@ -90,6 +90,31 @@ const App: React.FC = () => {
     document.documentElement.classList.toggle('disable-animations', !appearance.animations);
     document.documentElement.classList.toggle('ui-compact', appearance.density === 'compact');
     document.documentElement.classList.toggle('no-glass', !appearance.glassEffect);
+  };
+
+  const refreshBadges = () => {
+    const store = getStore();
+    if (!store.currentUser) return;
+    const u = store.currentUser;
+
+    const notifications = store.notifications.filter(n => n.userId === u.id && !n.isRead).length;
+
+    let maintenance = 0;
+    if (u.role === UserRole.AGENT) {
+       const agentProps = store.properties.filter(p => p.agentId === u.id).map(p => p.id);
+       maintenance = store.tickets.filter(t => t.status === TicketStatus.OPEN && agentProps.includes(t.propertyId)).length;
+    } else if (u.role === UserRole.ADMIN) {
+       maintenance = store.tickets.filter(t => t.status === TicketStatus.OPEN).length;
+    }
+
+    let screenings = 0;
+    if (u.role === UserRole.AGENT) {
+       screenings = store.applications.filter(a => a.status === ApplicationStatus.PENDING && a.agentId === u.id).length;
+    } else if (u.role === UserRole.ADMIN) {
+       screenings = store.applications.filter(a => a.status === ApplicationStatus.PENDING).length;
+    }
+
+    setBadges({ notifications, maintenance, screenings });
   };
 
   useEffect(() => {
@@ -114,8 +139,7 @@ const App: React.FC = () => {
       if (store.currentUser) {
         setUser(store.currentUser);
         if (store.currentUser.role === UserRole.ADMIN) setView('admin_dashboard');
-        const unread = store.notifications.filter(n => n.userId === store.currentUser?.id && !n.isRead).length;
-        setUnreadCount(unread);
+        refreshBadges();
       }
       setIsLoading(false);
     }, 2000);
@@ -129,14 +153,6 @@ const App: React.FC = () => {
     const store = getStore();
     store.theme = newTheme;
     saveStore(store);
-  };
-
-  const refreshUnreadCount = () => {
-    const store = getStore();
-    if (user) {
-      const unread = store.notifications.filter(n => n.userId === user.id && !n.isRead).length;
-      setUnreadCount(unread);
-    }
   };
 
   const handleLogin = (loggedUser: User) => {
@@ -154,7 +170,7 @@ const App: React.FC = () => {
       setView(loggedUser.role === UserRole.ADMIN ? 'admin_dashboard' : 'dashboard');
     }
     
-    refreshUnreadCount();
+    refreshBadges();
     syncVisualSettings(); // Refresh visual state on login
   };
 
@@ -172,13 +188,13 @@ const App: React.FC = () => {
       case 'admin_dashboard': return <AdminDashboard user={user} onNavigate={setView} />;
       case 'dashboard': return <Dashboard user={user} />;
       case 'properties': return <Properties user={user} />;
-      case 'maintenance': return <Maintenance user={user} />;
+      case 'maintenance': return <Maintenance user={user} onUpdate={refreshBadges} />;
       case 'payments': return <Payments user={user} />;
       case 'agreements': return <Agreements user={user} />;
-      case 'notifications': return <Notifications user={user} onRefreshCount={refreshUnreadCount} onNavigate={setView} />;
+      case 'notifications': return <Notifications user={user} onRefreshCount={refreshBadges} onNavigate={setView} />;
       case 'reports': return <Reports user={user} />;
-      case 'applications': return <Applications user={user} onNavigate={setView} />;
-      case 'screenings': return <Screenings user={user} onNavigate={setView} />;
+      case 'applications': return <Applications user={user} onNavigate={setView} onUpdate={refreshBadges} />;
+      case 'screenings': return <Screenings user={user} onNavigate={setView} onUpdate={refreshBadges} />;
       case 'admin_applications': return <AdminApplications user={user} onBack={() => setView('admin_dashboard')} />;
       case 'profile': return <Profile user={user} onUserUpdate={setUser} />;
       case 'settings': return <Settings user={user} onThemeChange={setTheme} onSettingsUpdate={syncVisualSettings} />;
@@ -191,9 +207,9 @@ const App: React.FC = () => {
     { id: 'dashboard', label: 'Overview', icon: Home, roles: [UserRole.AGENT, UserRole.TENANT] },
     { id: 'applications', label: 'Apply Now', icon: UserPlus, roles: [UserRole.TENANT] },
     { id: 'properties', label: 'Properties', icon: Building2, roles: [UserRole.AGENT, UserRole.ADMIN, UserRole.TENANT] },
-    { id: 'maintenance', label: 'Maintenance', icon: Wrench, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
-    { id: 'notifications', label: 'Notifications', icon: Bell, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN], badge: unreadCount },
-    { id: 'screenings', label: 'Screenings', icon: ClipboardCheck, roles: [UserRole.AGENT, UserRole.ADMIN] },
+    { id: 'maintenance', label: 'Maintenance', icon: Wrench, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN], badge: badges.maintenance },
+    { id: 'notifications', label: 'Notifications', icon: Bell, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN], badge: badges.notifications },
+    { id: 'screenings', label: 'Screenings', icon: ClipboardCheck, roles: [UserRole.AGENT, UserRole.ADMIN], badge: badges.screenings },
     { id: 'reports', label: 'Global Registry', icon: Table, roles: [UserRole.AGENT, UserRole.ADMIN] },
     { id: 'agreements', label: 'Agreements (Soon)', icon: FileText, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
     { id: 'payments', label: 'Rent & Payments', icon: CreditCard, roles: [UserRole.AGENT, UserRole.TENANT, UserRole.ADMIN] },
@@ -285,12 +301,14 @@ const App: React.FC = () => {
                 <item.icon className={`${isSidebarCollapsed ? '' : 'mr-4'} h-5 w-5 shrink-0 ${view === item.id ? 'text-white' : 'text-zinc-400 group-hover:text-blue-600'}`} /> 
                 {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
                 
-                {item.badge && !isSidebarCollapsed ? (
-                  <span className="ml-auto bg-blue-600 dark:bg-blue-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black border border-white/20">
-                    {item.badge}
-                  </span>
-                ) : item.badge && isSidebarCollapsed ? (
-                  <span className="absolute top-2 right-2 w-2 h-2 bg-blue-600 rounded-full border border-white dark:border-zinc-900"></span>
+                {item.badge && item.badge > 0 ? (
+                  !isSidebarCollapsed ? (
+                    <span className="ml-auto bg-blue-600 dark:bg-blue-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black border border-white/20">
+                      {item.badge}
+                    </span>
+                  ) : (
+                    <span className="absolute top-2 right-2 w-2 h-2 bg-blue-600 rounded-full border border-white dark:border-zinc-900"></span>
+                  )
                 ) : null}
               </button>
             ))}

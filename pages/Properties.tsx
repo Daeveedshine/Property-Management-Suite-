@@ -10,7 +10,6 @@ import {
   Search, CheckCircle2, ClipboardCheck, Building, Camera, Image as ImageIcon, AlertTriangle,
   Upload, Send, FileWarning, AlertOctagon, AlertCircle
 } from 'lucide-react';
-import { analyzeMaintenanceRequest } from '../services/geminiService';
 
 interface PropertiesProps {
   user: User;
@@ -256,18 +255,16 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     if (!selectedProperty || !maintenanceIssue) return;
     setIsSaving(true);
 
-    const aiRes = await analyzeMaintenanceRequest(maintenanceIssue);
-
     const newTicket: MaintenanceTicket = {
       id: `t${Date.now()}`,
       propertyId: selectedProperty.id,
       tenantId: user.id,
       issue: maintenanceIssue,
       status: TicketStatus.OPEN,
-      priority: (aiRes.priority as TicketPriority) || TicketPriority.MEDIUM,
+      priority: TicketPriority.MEDIUM,
       createdAt: new Date().toISOString(),
       imageUrl: maintenanceImage || undefined,
-      aiAssessment: aiRes.assessment
+      aiAssessment: undefined
     };
 
     const notification = {
@@ -808,12 +805,6 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                                         <div className="h-48 w-full rounded-2xl overflow-hidden cursor-pointer bg-black/20" onClick={() => setExpandedImage(ticket.imageUrl || null)}>
                                             <img src={ticket.imageUrl} className="w-full h-full object-cover hover:scale-105 transition-transform" alt="Evidence" />
                                         </div>
-                                    )}
-                                    {ticket.aiAssessment && (
-                                       <div className="p-4 bg-blue-600/5 rounded-2xl border border-blue-600/10">
-                                          <p className="text-[10px] font-bold text-blue-600 uppercase mb-1">AI Assessment</p>
-                                          <p className="text-xs text-zinc-600 dark:text-zinc-400 italic">"{ticket.aiAssessment}"</p>
-                                       </div>
                                     )}
                                 </div>
                             ))
