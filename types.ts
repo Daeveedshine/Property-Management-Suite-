@@ -61,6 +61,7 @@ export interface User {
   role: UserRole;
   assignedPropertyId?: string;
   phone?: string;
+  profilePictureUrl?: string;
 }
 
 export interface Property {

@@ -1,11 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, UserRole, FormTemplate, FormSection, FormField, FieldType } from '../types';
 import { getStore, saveStore, UserSettings } from '../store';
 import { 
   User as UserIcon, Mail, Phone, Shield, Save, CheckCircle2, 
   AlertCircle, Copy, Check, Link as LinkIcon, FileText, 
-  Settings as SettingsIcon, PenTool, Plus, Trash2, GripVertical, X, Loader2
+  Settings as SettingsIcon, PenTool, Plus, Trash2, GripVertical, X, Loader2,
+  Camera
 } from 'lucide-react';
 
 interface ProfileProps {
@@ -17,10 +18,13 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'form'>('general');
   const [name, setName] = useState(user.name);
   const [userPhone, setUserPhone] = useState(user.phone || '');
+  const [profilePic, setProfilePic] = useState<string | undefined>(user.profilePictureUrl);
   const [isSaving, setIsSaving] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- FORM BUILDER STATE ---
   const [editingTemplate, setEditingTemplate] = useState<FormTemplate | null>(null);
@@ -49,13 +53,23 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
 
   // --- GENERAL PROFILE HANDLERS ---
 
+  const handleProfilePicUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProfilePic(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleUpdate = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     
     setTimeout(() => {
       const store = getStore();
-      const updatedUser = { ...user, name, phone: userPhone };
+      const updatedUser = { ...user, name, phone: userPhone, profilePictureUrl: profilePic };
       
       const updatedUsers = store.users.map(u => u.id === user.id ? updatedUser : u);
       const newState = { ...store, users: updatedUsers, currentUser: updatedUser };
@@ -210,9 +224,26 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
           <div className="md:col-span-1 space-y-6">
             {/* Identity Card */}
             <div className="bg-zinc-900 p-8 rounded-[2.5rem] border border-zinc-800 flex flex-col items-center text-center shadow-2xl">
-              <div className="w-24 h-24 bg-white rounded-3xl flex items-center justify-center text-zinc-300 border border-zinc-200 text-3xl font-black shadow-lg mb-6">
-                {user.name.charAt(0)}
+              <div 
+                className="relative group cursor-pointer" 
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <div className="w-28 h-28 bg-white rounded-[2rem] overflow-hidden flex items-center justify-center text-zinc-300 border border-zinc-200 text-3xl font-black shadow-lg mb-6 relative">
+                  {profilePic ? (
+                    <img src={profilePic} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    user.name.charAt(0)
+                  )}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                     <Camera className="text-white w-8 h-8" />
+                  </div>
+                </div>
+                <div className="absolute -bottom-2 -right-2 bg-blue-600 rounded-full p-2 text-white border-4 border-zinc-900 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm">
+                    <Plus size={14} />
+                </div>
               </div>
+              <input ref={fileInputRef} type="file" className="hidden" accept="image/*" onChange={handleProfilePicUpload} />
+
               <h2 className="text-2xl font-black text-white">{user.name}</h2>
               <div className="mt-2 inline-flex items-center px-4 py-1.5 bg-blue-600/10 text-blue-500 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-500/20">
                 <Shield size={12} className="mr-2" /> {user.role}

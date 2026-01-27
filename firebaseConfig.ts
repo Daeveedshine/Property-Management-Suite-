@@ -1,4 +1,5 @@
-import * as firebaseApp from 'firebase/app';
+
+import firebase from 'firebase/compat/app';
 import { getFirestore } from 'firebase/firestore';
 
 // ------------------------------------------------------------------
@@ -15,7 +16,8 @@ const firebaseConfig = {
   measurementId: "G-8XNGK1MF1T"
 };
 
-// Check if config is set up (Simple check to ensure apiKey is present)
+// Check if config is set up
+// We check if apiKey is present and not a generic placeholder.
 const isConfigured = !!firebaseConfig.apiKey && firebaseConfig.apiKey !== "AIzaSyANIBIA_Vl-T9C-zaRUTSfGE9AuWdJcxGY";
 
 let app;
@@ -23,10 +25,10 @@ let db: any;
 
 if (isConfigured) {
   try {
-    // Initialize modular app
-    app = firebaseApp.initializeApp(firebaseConfig);
-    // Initialize modular firestore
-    db = getFirestore(app);
+    // Initialize modular app via compat for robustness against type issues
+    app = firebase.initializeApp(firebaseConfig);
+    // Initialize modular firestore (uses default app)
+    db = getFirestore();
     console.log("🔥 Firebase initialized successfully.");
   } catch (error) {
     console.error("Firebase initialization failed:", error);

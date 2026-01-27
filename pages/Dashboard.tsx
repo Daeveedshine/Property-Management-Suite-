@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { User, UserRole, PropertyStatus, TicketStatus, NotificationType, ApplicationStatus } from '../types';
 import { getStore, formatCurrency, formatDate } from '../store';
@@ -60,9 +61,16 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-12">
-      <header>
-        <h1 className="text-5xl font-black text-zinc-900 dark:text-white tracking-tighter">Overview</h1>
-        <p className="text-zinc-500 font-medium tracking-tight mt-1">Lifecycle monitoring for {user.name}.</p>
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-5xl font-black text-zinc-900 dark:text-white tracking-tighter">Overview</h1>
+          <p className="text-zinc-500 font-medium tracking-tight mt-1">Lifecycle monitoring for {user.name}.</p>
+        </div>
+        {user.profilePictureUrl && (
+          <div className="w-14 h-14 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-xl">
+             <img src={user.profilePictureUrl} alt="Profile" className="w-full h-full object-cover" />
+          </div>
+        )}
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
