@@ -77,6 +77,7 @@ export interface Property {
   type: PropertyType;
   rentStartDate?: string;
   rentExpiryDate?: string;
+  images?: string[];
 }
 
 export type FieldType = 'text' | 'number' | 'date' | 'select' | 'textarea' | 'file' | 'email' | 'tel';

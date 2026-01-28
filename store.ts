@@ -126,9 +126,9 @@ const initialData: AppState = {
     { id: 'u4', name: 'Sarah Admin', email: 'admin@example.com', role: UserRole.ADMIN, phone: '+234 804 567 8901' },
   ],
   properties: [
-    { id: 'p1', name: 'Sunset Apartments #402', location: 'Victoria Island, Lagos', rent: 2500000, status: PropertyStatus.OCCUPIED, agentId: 'u1', tenantId: 'u2', category: PropertyCategory.RESIDENTIAL, type: '2 Bedroom flat', description: 'Luxury 2 bedroom apartment with breathtaking ocean views.', rentStartDate: '2024-01-01', rentExpiryDate: '2024-12-31' },
-    { id: 'p2', name: 'Downtown Loft', location: 'Maitama, Abuja', rent: 3200000, status: PropertyStatus.VACANT, agentId: 'u1', category: PropertyCategory.RESIDENTIAL, type: 'Studio Appartment', description: 'Modern studio loft in the heart of the city.' },
-    { id: 'p3', name: 'Oak Ridge Villa', location: 'Lekki Phase 1, Lagos', rent: 4500000, status: PropertyStatus.LISTED, agentId: 'u1', category: PropertyCategory.RESIDENTIAL, type: 'Fully Detached Duplex', description: 'Spacious duplex with private garden and security.' },
+    { id: 'p1', name: 'Sunset Apartments #402', location: 'Victoria Island, Lagos', rent: 2500000, status: PropertyStatus.OCCUPIED, agentId: 'u1', tenantId: 'u2', category: PropertyCategory.RESIDENTIAL, type: '2 Bedroom flat', description: 'Luxury 2 bedroom apartment with breathtaking ocean views.', rentStartDate: '2024-01-01', rentExpiryDate: '2024-12-31', images: [] },
+    { id: 'p2', name: 'Downtown Loft', location: 'Maitama, Abuja', rent: 3200000, status: PropertyStatus.VACANT, agentId: 'u1', category: PropertyCategory.RESIDENTIAL, type: 'Studio Appartment', description: 'Modern studio loft in the heart of the city.', images: [] },
+    { id: 'p3', name: 'Oak Ridge Villa', location: 'Lekki Phase 1, Lagos', rent: 4500000, status: PropertyStatus.LISTED, agentId: 'u1', category: PropertyCategory.RESIDENTIAL, type: 'Fully Detached Duplex', description: 'Spacious duplex with private garden and security.', images: [] },
   ],
   agreements: [
     { id: 'a1', propertyId: 'p1', tenantId: 'u2', version: 1, startDate: '2023-01-01', endDate: '2024-12-31', status: 'active', documentUrl: 'https://example.com/lease_v1.pdf' },

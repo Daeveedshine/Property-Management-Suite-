@@ -8,7 +8,7 @@ import {
   Maximize2, Users, CalendarDays, Clock, FileText, ChevronDown,
   ArrowUpNarrowWide, ArrowDownWideNarrow, CalendarRange, ListFilter,
   Search, CheckCircle2, ClipboardCheck, Building, Camera, Image as ImageIcon, AlertTriangle,
-  Upload, Send, FileWarning, AlertOctagon, AlertCircle
+  Upload, Send, FileWarning, AlertOctagon, AlertCircle, Trash2, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 interface PropertiesProps {
@@ -38,6 +38,11 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
   const [tenantSearch, setTenantSearch] = useState('');
   const [editFormData, setEditFormData] = useState<Partial<Property>>({});
   
+  // Carousel State
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
   // Maintenance State
   const [maintenanceIssue, setMaintenanceIssue] = useState('');
   const [maintenanceImage, setMaintenanceImage] = useState<string | null>(null);
@@ -54,6 +59,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const propImagesRef = useRef<HTMLInputElement>(null);
   const noticeFileInputRef = useRef<HTMLInputElement>(null);
   const { settings } = store;
 
@@ -68,6 +74,11 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
       setNoticeMessage(`NOTICE TO QUIT\n\nDate: ${today}\n\nDear Tenant,\n\nThis serves as a formal notice to quit and deliver up possession of the premises known as ${selectedProperty.name} by [ENTER DATE].\n\nFailure to comply will lead to legal action for recovery of premises.`);
     }
   }, [noticeType, selectedProperty]);
+
+  // Reset carousel on property select
+  useEffect(() => {
+      setCurrentImageIndex(0);
+  }, [selectedProperty]);
 
   // Helper for days remaining
   const getDaysRemaining = (expiryDate?: string) => {
@@ -116,7 +127,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
         saveStore(newState);
         setStore(newState);
     }
-  }, [user.id, user.role]); // Run on mount and user change
+  }, [user.id, user.role]); 
 
   const properties = useMemo(() => {
     let list: Property[] = [];
@@ -228,6 +239,46 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
       setShowTenantPicker(false);
       setTenantSearch('');
     }, 1200);
+  };
+
+  const handlePropertyImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newImages: string[] = [];
+    const readers: Promise<void>[] = [];
+
+    Array.from(files).forEach((file: File) => {
+      // Basic validation: must be image and < 5MB
+      if (!file.type.startsWith('image/')) return;
+      if (file.size > 5 * 1024 * 1024) return;
+
+      const reader = new FileReader();
+      const promise = new Promise<void>((resolve) => {
+        reader.onloadend = () => {
+          if (reader.result) {
+            newImages.push(reader.result as string);
+          }
+          resolve();
+        };
+      });
+      reader.readAsDataURL(file);
+      readers.push(promise);
+    });
+
+    await Promise.all(readers);
+    
+    setEditFormData(prev => ({
+        ...prev,
+        images: [...(prev.images || []), ...newImages]
+    }));
+  };
+
+  const removePropertyImage = (indexToRemove: number) => {
+    setEditFormData(prev => ({
+        ...prev,
+        images: (prev.images || []).filter((_, idx) => idx !== indexToRemove)
+    }));
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -343,6 +394,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     setShowMaintenanceForm(false);
     setShowMaintenanceList(false);
     setShowNoticeForm(false);
+    setCurrentImageIndex(0);
   };
 
   const handleStartEdit = (e: React.MouseEvent, property: Property) => {
@@ -354,6 +406,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     setShowMaintenanceForm(false);
     setShowMaintenanceList(false);
     setShowNoticeForm(false);
+    setCurrentImageIndex(0);
   };
 
   const calculateExpiryDate = (startDate: string) => {
@@ -397,7 +450,8 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
           agentId: user.id,
           category: PropertyCategory.RESIDENTIAL,
           type: 'Mini Flat (1 Bedroom)',
-          description: 'Enter description here...'
+          description: 'Enter description here...',
+          images: []
       };
       const updatedStore = { ...store, properties: [...store.properties, newProperty] };
       saveStore(updatedStore);
@@ -413,6 +467,43 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     { id: 'location', label: 'By Location (A-Z)', icon: MapPin },
     { id: 'expiry', label: 'By Expiry Month', icon: CalendarRange },
   ];
+
+  // Logic for carousel display
+  const displayImages = useMemo(() => {
+      if (!selectedProperty) return [];
+      if (selectedProperty.images && selectedProperty.images.length > 0) return selectedProperty.images;
+      return [`https://picsum.photos/seed/${selectedProperty.id}/800/1200`];
+  }, [selectedProperty]);
+
+  const nextImage = (e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      setCurrentImageIndex((prev) => (prev + 1) % displayImages.length);
+  };
+
+  const prevImage = (e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      setCurrentImageIndex((prev) => (prev - 1 + displayImages.length) % displayImages.length);
+  };
+
+  // Mobile Swipe Logic
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > 50;
+    const isRightSwipe = distance < -50;
+
+    if (isLeftSwipe) nextImage();
+    if (isRightSwipe) prevImage();
+  };
 
   return (
     <div className="space-y-8 md:space-y-12 animate-in fade-in duration-500 pb-20">
@@ -470,6 +561,11 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
           const daysRemaining = getDaysRemaining(property.rentExpiryDate);
           const isExpiringSoon = daysRemaining !== null && daysRemaining <= 30 && daysRemaining > 0;
           const isExpired = daysRemaining !== null && daysRemaining <= 0;
+          
+          // List view image preference: 1st uploaded image -> seed image
+          const thumbnail = property.images && property.images.length > 0 
+            ? property.images[0] 
+            : `https://picsum.photos/seed/${property.id}/600/800`;
 
           return (
             <div 
@@ -479,7 +575,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
             >
               <div className="w-full md:w-5/12 h-80 md:h-auto bg-offwhite dark:bg-black relative overflow-hidden shrink-0">
                 <img 
-                  src={`https://picsum.photos/seed/${property.id}/600/800`} 
+                  src={thumbnail} 
                   alt={property.name} 
                   className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105" 
                 />
@@ -496,6 +592,12 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                     </span>
                   )}
                 </div>
+                {/* Image Count Badge */}
+                {property.images && property.images.length > 1 && (
+                    <div className="absolute bottom-4 right-4 bg-black/50 backdrop-blur-md text-white px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-2">
+                        <ImageIcon size={12} /> {property.images.length}
+                    </div>
+                )}
               </div>
 
               <div className="p-10 flex-1 flex flex-col justify-between space-y-8">
@@ -575,15 +677,55 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-3xl animate-in fade-in duration-500">
           <div className="glass-card w-full max-w-6xl md:rounded-[3.5rem] shadow-[0_32px_128px_rgba(0,0,0,0.5)] border-white/20 dark:border-white/5 overflow-hidden flex flex-col md:flex-row h-full md:h-auto md:max-h-[92vh] relative">
              
+             {/* CAROUSEL SECTION */}
              <div 
-               className="w-full md:w-5/12 h-72 md:h-auto relative group cursor-pointer shrink-0"
-               onClick={() => setExpandedImage(`https://picsum.photos/seed/${selectedProperty.id}/1200/1600`)}
+               className="w-full md:w-5/12 h-72 md:h-auto relative group shrink-0 bg-black"
+               onTouchStart={onTouchStart}
+               onTouchMove={onTouchMove}
+               onTouchEnd={onTouchEnd}
              >
-                <img src={`https://picsum.photos/seed/${selectedProperty.id}/800/1200`} className="w-full h-full object-cover" alt="Property Preview" />
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <Maximize2 className="text-white" size={48} />
+                <div 
+                    className="w-full h-full relative cursor-pointer"
+                    onClick={() => setExpandedImage(displayImages[currentImageIndex])}
+                >
+                    <img 
+                        src={displayImages[currentImageIndex]} 
+                        className="w-full h-full object-cover" 
+                        alt="Property Preview" 
+                    />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                        <Maximize2 className="text-white" size={48} />
+                    </div>
                 </div>
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-10">
+
+                {/* Carousel Controls */}
+                {displayImages.length > 1 && (
+                    <>
+                        <button 
+                            onClick={prevImage}
+                            className="absolute left-4 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                            <ChevronLeft size={24} />
+                        </button>
+                        <button 
+                            onClick={nextImage}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                            <ChevronRight size={24} />
+                        </button>
+                        <div className="absolute bottom-20 md:bottom-28 left-0 right-0 flex justify-center gap-2 z-10">
+                            {displayImages.map((_, idx) => (
+                                <button 
+                                    key={idx}
+                                    onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(idx); }}
+                                    className={`w-2 h-2 rounded-full transition-all ${idx === currentImageIndex ? 'bg-white w-4' : 'bg-white/50 hover:bg-white/80'}`}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
+
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-10 pointer-events-none">
                     <p className="text-white font-black text-3xl tracking-tighter">{selectedProperty.name}</p>
                     <p className="text-white/60 text-[11px] font-black uppercase tracking-widest flex items-center gap-2 mt-2">
                       <MapPin size={12} className="text-blue-400" /> {selectedProperty.location}
@@ -596,6 +738,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
 
              <div className="flex-1 p-8 md:p-14 overflow-y-auto custom-scrollbar scroll-smooth">
                 {showTenantPicker ? (
+                   /* ... Tenant Picker UI ... */
                    <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500 h-full flex flex-col">
                       <div className="flex items-center justify-between">
                          <div className="flex items-center gap-4">
@@ -643,6 +786,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                       </div>
                    </div>
                 ) : showMaintenanceForm ? (
+                  /* ... Maintenance Form UI ... */
                   <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
                     <div className="flex items-center justify-between">
                        <div className="flex items-center gap-4">
@@ -697,6 +841,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                     </div>
                   </div>
                 ) : showNoticeForm ? (
+                  /* ... Notice Form UI ... */
                   <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
                     <div className="flex items-center justify-between">
                        <div className="flex items-center gap-4">
@@ -772,6 +917,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                     </div>
                   </div>
                 ) : showMaintenanceList ? (
+                  /* ... Maintenance List UI ... */
                   <div className="space-y-8 animate-in slide-in-from-bottom-8 duration-500">
                     <div className="flex items-center justify-between">
                        <div className="flex items-center gap-4">
@@ -893,6 +1039,43 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                                           ))}
                                         </select>
                                     </InputWrapper>
+
+                                    {/* Multi-Image Upload Section */}
+                                    <div className="col-span-1 sm:col-span-2">
+                                        <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1 mb-2">Property Gallery</p>
+                                        
+                                        <div 
+                                            onClick={() => propImagesRef.current?.click()}
+                                            className="w-full h-32 rounded-[2rem] bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer hover:border-blue-600/40 transition-all mb-4"
+                                        >
+                                            <ImageIcon className="text-zinc-400 mb-2" size={24} />
+                                            <p className="text-[10px] font-black uppercase text-zinc-500">Add Images</p>
+                                        </div>
+                                        <input 
+                                            type="file" 
+                                            multiple 
+                                            hidden 
+                                            ref={propImagesRef} 
+                                            accept="image/*" 
+                                            onChange={handlePropertyImagesUpload} 
+                                        />
+
+                                        {editFormData.images && editFormData.images.length > 0 && (
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
+                                                {editFormData.images.map((img, idx) => (
+                                                    <div key={idx} className="aspect-square rounded-2xl overflow-hidden relative group">
+                                                        <img src={img} alt={`Gallery ${idx}`} className="w-full h-full object-cover" />
+                                                        <button 
+                                                            onClick={() => removePropertyImage(idx)}
+                                                            className="absolute top-1 right-1 p-1.5 bg-rose-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </>
                             ) : (
                                 <>
