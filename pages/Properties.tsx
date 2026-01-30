@@ -8,7 +8,7 @@ import {
   Maximize2, Users, CalendarDays, Clock, FileText, ChevronDown,
   ArrowUpNarrowWide, ArrowDownWideNarrow, CalendarRange, ListFilter,
   Search, CheckCircle2, ClipboardCheck, Building, Camera, Image as ImageIcon, AlertTriangle,
-  Upload, Send, FileWarning, AlertOctagon, AlertCircle, Trash2, ChevronLeft, ChevronRight
+  Upload, Send, FileWarning, AlertOctagon, AlertCircle, Trash2, ChevronLeft, ChevronRight, Filter
 } from 'lucide-react';
 
 interface PropertiesProps {
@@ -57,6 +57,12 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('none');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
+  
+  // Filters State
+  const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [filterCategory, setFilterCategory] = useState<string>('ALL');
+  const [filterType, setFilterType] = useState<string>('ALL');
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const propImagesRef = useRef<HTMLInputElement>(null);
@@ -139,6 +145,17 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
       list = [...store.properties.filter(p => p.id === user.assignedPropertyId)];
     }
 
+    // Apply Filters
+    if (filterStatus !== 'ALL') {
+        list = list.filter(p => p.status === filterStatus);
+    }
+    if (filterCategory !== 'ALL') {
+        list = list.filter(p => p.category === filterCategory);
+    }
+    if (filterType !== 'ALL') {
+        list = list.filter(p => p.type === filterType);
+    }
+
     switch (sortBy) {
       case 'rent_asc': list.sort((a, b) => a.rent - b.rent); break;
       case 'rent_desc': list.sort((a, b) => b.rent - a.rent); break;
@@ -153,7 +170,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
       default: break;
     }
     return list;
-  }, [user, store, sortBy]);
+  }, [user, store, sortBy, filterStatus, filterCategory, filterType]);
 
   const approvedTenants = useMemo(() => {
     const approvedAppUserIds = store.applications
@@ -514,9 +531,78 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
         </div>
         
         <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
+          {/* Filter Button */}
           <div className="relative">
             <button 
-              onClick={() => setIsSortMenuOpen(!isSortMenuOpen)}
+              onClick={() => { setIsFilterMenuOpen(!isFilterMenuOpen); setIsSortMenuOpen(false); }}
+              className={`w-full sm:w-auto px-6 py-4 rounded-2xl border border-white/20 dark:border-white/5 backdrop-blur-md flex items-center justify-between gap-4 font-bold text-[11px] uppercase tracking-widest transition-all active:scale-95 shadow-xl ${isFilterMenuOpen ? 'bg-blue-600 text-white' : 'bg-white/10 text-zinc-600 dark:text-zinc-300 hover:bg-white/20'}`}
+            >
+              <div className="flex items-center gap-3">
+                <Filter size={16} />
+                <span>Filters</span>
+              </div>
+              {(filterStatus !== 'ALL' || filterCategory !== 'ALL' || filterType !== 'ALL') && (
+                <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+              )}
+            </button>
+
+            {isFilterMenuOpen && (
+              <div className="absolute top-full right-0 mt-2 z-50 glass-card p-6 rounded-[2rem] shadow-2xl animate-in zoom-in-95 slide-in-from-top-2 w-full sm:w-72 flex flex-col gap-4">
+                 <div className="space-y-2">
+                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Status</label>
+                    <div className="relative">
+                        <select 
+                            className="glass-input w-full rounded-xl px-4 py-3 text-xs font-bold text-zinc-900 dark:text-white outline-none appearance-none"
+                            value={filterStatus}
+                            onChange={(e) => setFilterStatus(e.target.value)}
+                        >
+                            <option value="ALL">All Statuses</option>
+                            {Object.values(PropertyStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" size={14} />
+                    </div>
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Category</label>
+                    <div className="relative">
+                        <select 
+                            className="glass-input w-full rounded-xl px-4 py-3 text-xs font-bold text-zinc-900 dark:text-white outline-none appearance-none"
+                            value={filterCategory}
+                            onChange={(e) => setFilterCategory(e.target.value)}
+                        >
+                            <option value="ALL">All Categories</option>
+                            {Object.values(PropertyCategory).map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" size={14} />
+                    </div>
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1">Type</label>
+                    <div className="relative">
+                        <select 
+                            className="glass-input w-full rounded-xl px-4 py-3 text-xs font-bold text-zinc-900 dark:text-white outline-none appearance-none"
+                            value={filterType}
+                            onChange={(e) => setFilterType(e.target.value)}
+                        >
+                            <option value="ALL">All Types</option>
+                            {PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" size={14} />
+                    </div>
+                 </div>
+                 <button 
+                    onClick={() => { setFilterStatus('ALL'); setFilterCategory('ALL'); setFilterType('ALL'); }}
+                    className="w-full py-3 text-[10px] font-black uppercase tracking-widest text-zinc-400 hover:text-rose-500 transition-colors"
+                 >
+                    Reset Filters
+                 </button>
+              </div>
+            )}
+          </div>
+
+          <div className="relative">
+            <button 
+              onClick={() => { setIsSortMenuOpen(!isSortMenuOpen); setIsFilterMenuOpen(false); }}
               className="w-full sm:w-auto px-6 py-4 rounded-2xl bg-white/10 border border-white/20 dark:border-white/5 backdrop-blur-md flex items-center justify-between gap-4 font-bold text-[11px] uppercase tracking-widest text-zinc-600 dark:text-zinc-300 hover:bg-white/20 transition-all active:scale-95 shadow-xl"
             >
               <div className="flex items-center gap-3">

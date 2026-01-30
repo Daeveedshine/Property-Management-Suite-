@@ -49,15 +49,25 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const paymentData = useMemo(() => {
     // Scaling graph data based on currency setting
     const scale = settings.localization.currency === 'NGN' ? 1 : (settings.localization.currency === 'USD' ? 0.00065 : 0.0006);
-    return [
-      { name: 'Jan', amount: 4000000 * scale },
-      { name: 'Feb', amount: 3000000 * scale },
-      { name: 'Mar', amount: 2000000 * scale },
-      { name: 'Apr', amount: 2780000 * scale },
-      { name: 'May', amount: 1890000 * scale },
-      { name: 'Jun', amount: 2390000 * scale },
-    ];
-  }, [settings.localization.currency]);
+    
+    // Initialize months for chart
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const currentYear = new Date().getFullYear();
+    const data = months.map(m => ({ name: m, amount: 0 }));
+
+    store.payments.forEach(p => {
+        if (p.status === 'paid') {
+            const date = new Date(p.date);
+            if (!isNaN(date.getTime()) && date.getFullYear() === currentYear) {
+                const monthIndex = date.getMonth();
+                data[monthIndex].amount += p.amount;
+            }
+        }
+    });
+
+    // Apply currency scale
+    return data.map(d => ({ ...d, amount: d.amount * scale }));
+  }, [store.payments, settings.localization.currency]);
 
   return (
     <div className="space-y-10 animate-in fade-in duration-500 pb-12">

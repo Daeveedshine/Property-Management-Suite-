@@ -26,6 +26,67 @@ const PrintRow: React.FC<{ label: string; value: any }> = ({ label, value }) => 
   </div>
 );
 
+const DEFAULT_TEMPLATE: FormTemplate = {
+  agentId: 'default',
+  lastUpdated: new Date().toISOString(),
+  sections: [
+    {
+      id: 's1',
+      title: 'Identity Credentials',
+      icon: 'User',
+      fields: [
+        { id: 'f1', key: 'surname', label: 'Surname', type: 'text', required: true },
+        { id: 'f2', key: 'firstName', label: 'First Name', type: 'text', required: true },
+        { id: 'f3', key: 'middleName', label: 'Other Names', type: 'text', required: false },
+        { id: 'f4', key: 'dob', label: 'Date of Birth', type: 'date', required: true },
+        { id: 'f5', key: 'gender', label: 'Biological Gender', type: 'select', options: ['Male', 'Female'], required: true },
+        { id: 'f6', key: 'maritalStatus', label: 'Marital Status', type: 'select', options: ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated'], required: true }
+      ]
+    },
+    {
+      id: 's2',
+      title: 'Professional & Contact',
+      icon: 'Briefcase',
+      fields: [
+        { id: 'f7', key: 'occupation', label: 'Current Occupation', type: 'text', required: true },
+        { id: 'f8', key: 'familySize', label: 'Family Size', type: 'number', required: true },
+        { id: 'f9', key: 'phoneNumber', label: 'Phone Number', type: 'tel', required: true }
+      ]
+    },
+    {
+      id: 's3',
+      title: 'Residential History',
+      icon: 'MapPin',
+      fields: [
+        { id: 'f10', key: 'currentHomeAddress', label: 'Current House Address', type: 'textarea', required: true },
+        { id: 'f11', key: 'reasonForRelocating', label: 'Reason for Relocation', type: 'textarea', required: true },
+        { id: 'f12', key: 'currentLandlordName', label: 'Name of Current Landlord', type: 'text', required: true },
+        { id: 'f13', key: 'currentLandlordPhone', label: 'Landlord Phone Number', type: 'tel', required: true }
+      ]
+    },
+    {
+      id: 's4',
+      title: 'Identity Verification',
+      icon: 'ShieldCheck',
+      fields: [
+        { id: 'f14', key: 'verificationType', label: 'Select ID Type', type: 'select', options: ['NIN', "Voter's Card", 'Passport', 'Drivers License'], required: true },
+        { id: 'f15', key: 'verificationIdNumber', label: 'ID Number', type: 'text', required: true },
+        { id: 'f16', key: 'verificationUrl', label: 'Photo of Valid ID', type: 'file', required: true },
+        { id: 'f17', key: 'passportPhotoUrl', label: 'Passport Photo', type: 'file', required: true }
+      ]
+    },
+    {
+      id: 's5',
+      title: 'Final Authorization',
+      icon: 'PenTool',
+      fields: [
+        { id: 'f18', key: 'signature', label: 'Digital Signature (Full Legal Name)', type: 'text', required: true },
+        { id: 'f19', key: 'applicationDate', label: 'Application Date', type: 'date', required: true }
+      ]
+    }
+  ]
+};
+
 interface ApplicationsProps {
   user: User;
   onNavigate: (view: string) => void;
@@ -63,8 +124,10 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate, onUpdate 
       const agent = store.users.find(u => u.id.toLowerCase() === id.toLowerCase() && u.role === UserRole.AGENT);
       if (agent) {
         setTargetAgent(agent);
-        const template = store.formTemplates.find(t => t.agentId === agent.id) || store.formTemplates.find(t => t.agentId === 'u1');
-        setActiveTemplate(template || null);
+        // Use existing template or FALLBACK to DEFAULT if none exists
+        const template = store.formTemplates.find(t => t.agentId === agent.id) || DEFAULT_TEMPLATE;
+        
+        setActiveTemplate(template);
         setViewMode('form');
         
         // Pre-fill Agent ID in form data implicitly
@@ -531,7 +594,7 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate, onUpdate 
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         {Object.entries(viewingApp.customResponses || {}).map(([key, value]) => {
                            if (key === 'agentIdCode' || key === 'signature' || typeof value !== 'string') return null;
-                           if (['firstName', 'surname', 'middleName', 'dob', 'maritalStatus', 'gender', 'currentHomeAddress', 'occupation', 'familySize', 'phoneNumber', 'reasonForRelocating', 'currentLandlordName', 'currentLandlordPhone', 'verificationType', 'verificationIdNumber'].includes(key)) return null;
+                           if (['firstName', 'surname', 'middleName', 'dob', 'maritalStatus', 'gender', 'currentHomeAddress', 'occupation', 'familySize', 'phoneNumber', 'reasonForRelocating', 'currentLandlordName', 'currentLandlordPhone', 'verificationType', 'verificationIdNumber', 'verificationUrl', 'passportPhotoUrl'].includes(key)) return null;
                            
                            return <PrintRow key={key} label={key.replace(/([A-Z])/g, ' $1').trim()} value={String(value)} />;
                         })}

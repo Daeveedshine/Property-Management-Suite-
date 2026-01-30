@@ -6,13 +6,74 @@ import {
   User as UserIcon, Mail, Phone, Shield, Save, CheckCircle2, 
   AlertCircle, Copy, Check, Link as LinkIcon, FileText, 
   Settings as SettingsIcon, PenTool, Plus, Trash2, GripVertical, X, Loader2,
-  Camera
+  Camera, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 interface ProfileProps {
   user: User;
   onUserUpdate: (user: User) => void;
 }
+
+const DEFAULT_AGENT_TEMPLATE: FormTemplate = {
+  agentId: '', // Set dynamically
+  lastUpdated: new Date().toISOString(),
+  sections: [
+    {
+      id: 's1',
+      title: 'Identity Credentials',
+      icon: 'User',
+      fields: [
+        { id: 'f1', key: 'surname', label: 'Surname', type: 'text', required: true },
+        { id: 'f2', key: 'firstName', label: 'First Name', type: 'text', required: true },
+        { id: 'f3', key: 'middleName', label: 'Other Names', type: 'text', required: false },
+        { id: 'f4', key: 'dob', label: 'Date of Birth', type: 'date', required: true },
+        { id: 'f5', key: 'gender', label: 'Biological Gender', type: 'select', options: ['Male', 'Female'], required: true },
+        { id: 'f6', key: 'maritalStatus', label: 'Marital Status', type: 'select', options: ['Single', 'Married', 'Divorced', 'Widow', 'Widower', 'Separated'], required: true }
+      ]
+    },
+    {
+      id: 's2',
+      title: 'Professional & Contact',
+      icon: 'Briefcase',
+      fields: [
+        { id: 'f7', key: 'occupation', label: 'Current Occupation', type: 'text', required: true },
+        { id: 'f8', key: 'familySize', label: 'Family Size', type: 'number', required: true },
+        { id: 'f9', key: 'phoneNumber', label: 'Phone Number', type: 'tel', required: true }
+      ]
+    },
+    {
+      id: 's3',
+      title: 'Residential History',
+      icon: 'MapPin',
+      fields: [
+        { id: 'f10', key: 'currentHomeAddress', label: 'Current House Address', type: 'textarea', required: true },
+        { id: 'f11', key: 'reasonForRelocating', label: 'Reason for Relocation', type: 'textarea', required: true },
+        { id: 'f12', key: 'currentLandlordName', label: 'Name of Current Landlord', type: 'text', required: true },
+        { id: 'f13', key: 'currentLandlordPhone', label: 'Landlord Phone Number', type: 'tel', required: true }
+      ]
+    },
+    {
+      id: 's4',
+      title: 'Identity Verification',
+      icon: 'ShieldCheck',
+      fields: [
+        { id: 'f14', key: 'verificationType', label: 'Select ID Type', type: 'select', options: ['NIN', "Voter's Card", 'Passport', 'Drivers License'], required: true },
+        { id: 'f15', key: 'verificationIdNumber', label: 'ID Number', type: 'text', required: true },
+        { id: 'f16', key: 'verificationUrl', label: 'Photo of Valid ID', type: 'file', required: true },
+        { id: 'f17', key: 'passportPhotoUrl', label: 'Passport Photo', type: 'file', required: true }
+      ]
+    },
+    {
+      id: 's5',
+      title: 'Final Authorization',
+      icon: 'PenTool',
+      fields: [
+        { id: 'f18', key: 'signature', label: 'Digital Signature (Full Legal Name)', type: 'text', required: true },
+        { id: 'f19', key: 'applicationDate', label: 'Application Date', type: 'date', required: true }
+      ]
+    }
+  ]
+};
 
 const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'form'>('general');
@@ -34,22 +95,18 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     if (user.role === UserRole.AGENT && activeTab === 'form') {
       const store = getStore();
       const existingTemplate = store.formTemplates.find(t => t.agentId === user.id);
+      
       if (existingTemplate) {
+        // Deep copy to avoid mutating store directly
         setEditingTemplate(JSON.parse(JSON.stringify(existingTemplate)));
       } else {
-        const defaultT = store.formTemplates.find(t => t.agentId === 'u1') || createDefaultTemplate(user.id);
-        const newT = JSON.parse(JSON.stringify(defaultT));
-        newT.agentId = user.id;
-        setEditingTemplate(newT);
+        // Load the full default template
+        const defaultT = JSON.parse(JSON.stringify(DEFAULT_AGENT_TEMPLATE));
+        defaultT.agentId = user.id;
+        setEditingTemplate(defaultT);
       }
     }
   }, [user.id, user.role, activeTab]);
-
-  const createDefaultTemplate = (agentId: string): FormTemplate => ({
-      agentId,
-      lastUpdated: new Date().toISOString(),
-      sections: []
-  });
 
   // --- GENERAL PROFILE HANDLERS ---
 
@@ -115,6 +172,17 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
     });
   };
 
+  const moveSection = (index: number, direction: 'up' | 'down') => {
+    if (!editingTemplate) return;
+    const newSections = [...editingTemplate.sections];
+    if (direction === 'up' && index > 0) {
+      [newSections[index], newSections[index - 1]] = [newSections[index - 1], newSections[index]];
+    } else if (direction === 'down' && index < newSections.length - 1) {
+       [newSections[index], newSections[index + 1]] = [newSections[index + 1], newSections[index]];
+    }
+    setEditingTemplate({ ...editingTemplate, sections: newSections });
+  };
+
   const updateSectionTitle = (sectionId: string, title: string) => {
     if (!editingTemplate) return;
     setEditingTemplate({
@@ -146,6 +214,23 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
         s.id === sectionId ? { ...s, fields: [...s.fields, newField] } : s
       )
     });
+  };
+
+  const moveField = (sectionIndex: number, fieldIndex: number, direction: 'up' | 'down') => {
+    if (!editingTemplate) return;
+    const newSections = [...editingTemplate.sections];
+    const section = { ...newSections[sectionIndex] };
+    const newFields = [...section.fields];
+
+    if (direction === 'up' && fieldIndex > 0) {
+        [newFields[fieldIndex], newFields[fieldIndex - 1]] = [newFields[fieldIndex - 1], newFields[fieldIndex]];
+    } else if (direction === 'down' && fieldIndex < newFields.length - 1) {
+        [newFields[fieldIndex], newFields[fieldIndex + 1]] = [newFields[fieldIndex + 1], newFields[fieldIndex]];
+    }
+
+    section.fields = newFields;
+    newSections[sectionIndex] = section;
+    setEditingTemplate({ ...editingTemplate, sections: newSections });
   };
 
   const updateField = (sectionId: string, fieldId: string, updates: Partial<FormField>) => {
@@ -369,7 +454,7 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
            <div className="flex justify-between items-center mb-8">
               <div>
                  <h2 className="text-xl font-black text-zinc-900 dark:text-white">Tenancy Application Form Architect</h2>
-                 <p className="text-zinc-500 text-xs font-bold mt-1">Customize the data you require from potential tenants.</p>
+                 <p className="text-zinc-500 text-xs font-bold mt-1">Customize and prioritize data requirements for new tenants.</p>
               </div>
               <button 
                 onClick={saveTemplate} 
@@ -382,10 +467,26 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
            </div>
 
            <div className="space-y-8">
-              {editingTemplate?.sections.map((section) => (
+              {editingTemplate?.sections.map((section, sIndex) => (
                 <div key={section.id} className="bg-white dark:bg-zinc-900 p-6 md:p-8 rounded-[2.5rem] border border-zinc-200 dark:border-zinc-800 shadow-sm relative group/section transition-all hover:border-blue-400/30">
                    <div className="flex items-center justify-between mb-6 border-b border-zinc-100 dark:border-zinc-800 pb-4">
                       <div className="flex items-center gap-3 w-full">
+                         <div className="flex flex-col gap-1 mr-2">
+                            <button 
+                                onClick={() => moveSection(sIndex, 'up')}
+                                disabled={sIndex === 0}
+                                className="p-1 text-zinc-400 hover:text-blue-600 disabled:opacity-30 disabled:hover:text-zinc-400 transition-colors"
+                            >
+                                <ArrowUp size={14} />
+                            </button>
+                            <button 
+                                onClick={() => moveSection(sIndex, 'down')}
+                                disabled={sIndex === (editingTemplate?.sections.length || 0) - 1}
+                                className="p-1 text-zinc-400 hover:text-blue-600 disabled:opacity-30 disabled:hover:text-zinc-400 transition-colors"
+                            >
+                                <ArrowDown size={14} />
+                            </button>
+                         </div>
                          <div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-zinc-400"><PenTool size={16} /></div>
                          <input 
                            className="text-lg font-black text-zinc-900 dark:text-white bg-transparent outline-none w-full placeholder:text-zinc-300"
@@ -400,9 +501,28 @@ const Profile: React.FC<ProfileProps> = ({ user, onUserUpdate }) => {
                    </div>
 
                    <div className="space-y-3">
-                      {section.fields.map((field) => (
+                      {section.fields.map((field, fIndex) => (
                         <div key={field.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-offwhite dark:bg-black rounded-2xl border border-zinc-100 dark:border-zinc-800 group/field hover:border-blue-500/30 transition-all">
                            <div className="p-2 text-zinc-300 cursor-grab active:cursor-grabbing"><GripVertical size={16} /></div>
+                           
+                           {/* Field Reorder Controls */}
+                           <div className="flex flex-col gap-1 mr-1">
+                                <button 
+                                    onClick={() => moveField(sIndex, fIndex, 'up')}
+                                    disabled={fIndex === 0}
+                                    className="p-0.5 text-zinc-400 hover:text-blue-600 disabled:opacity-30 disabled:hover:text-zinc-400 transition-colors"
+                                >
+                                    <ArrowUp size={10} />
+                                </button>
+                                <button 
+                                    onClick={() => moveField(sIndex, fIndex, 'down')}
+                                    disabled={fIndex === section.fields.length - 1}
+                                    className="p-0.5 text-zinc-400 hover:text-blue-600 disabled:opacity-30 disabled:hover:text-zinc-400 transition-colors"
+                                >
+                                    <ArrowDown size={10} />
+                                </button>
+                           </div>
+
                            <div className="flex-1 w-full sm:w-auto space-y-3 sm:space-y-0 sm:flex sm:gap-4 items-center">
                               <input 
                                 className="bg-transparent font-bold text-sm text-zinc-900 dark:text-white outline-none w-full sm:w-1/3 placeholder:text-zinc-400"
