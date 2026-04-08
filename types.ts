@@ -59,7 +59,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  assignedPropertyId?: string;
+  assignedPropertyIds?: string[];
   phone?: string;
   profilePictureUrl?: string;
 }

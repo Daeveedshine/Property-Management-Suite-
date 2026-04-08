@@ -142,7 +142,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     } else if (user.role === UserRole.AGENT) {
       list = [...store.properties.filter(p => p.agentId === user.id)];
     } else {
-      list = [...store.properties.filter(p => p.id === user.assignedPropertyId)];
+      list = [...store.properties.filter(p => user.assignedPropertyIds?.includes(p.id))];
     }
 
     // Apply Filters
@@ -179,7 +179,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
     
     return store.users
       .filter(u => u.role === UserRole.TENANT && approvedAppUserIds.includes(u.id))
-      .filter(u => !u.assignedPropertyId)
+      .filter(u => !u.assignedPropertyIds?.includes(selectedProperty?.id || ''))
       .filter(u => 
         u.name.toLowerCase().includes(tenantSearch.toLowerCase()) || 
         u.email.toLowerCase().includes(tenantSearch.toLowerCase())
@@ -210,7 +210,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
       );
 
       const updatedUsers = store.users.map(u => 
-        u.id === tenant.id ? { ...u, assignedPropertyId: selectedProperty.id } : u
+        u.id === tenant.id ? { ...u, assignedPropertyIds: [...(u.assignedPropertyIds || []), selectedProperty.id] } : u
       );
 
       const updatedApplications = store.applications.map(app => 
@@ -1299,7 +1299,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                                     )}
 
                                     {/* Tenant Actions */}
-                                    {user.assignedPropertyId === selectedProperty.id && (
+                                    {user.assignedPropertyIds?.includes(selectedProperty.id) && (
                                        <button 
                                           onClick={() => setShowMaintenanceForm(true)}
                                           className="flex-1 bg-white/10 text-zinc-900 dark:text-white font-black uppercase tracking-[0.2em] text-[10px] py-6 rounded-[2rem] border border-white/20 hover:bg-white/20 active:scale-95 transition-all flex items-center justify-center gap-3"

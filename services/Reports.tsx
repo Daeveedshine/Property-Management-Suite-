@@ -24,26 +24,42 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
 
   const reportData = useMemo(() => {
     const tenants = store.users.filter(u => u.role === UserRole.TENANT);
-    const rows: ReportRow[] = tenants.map(tenant => {
-      const property = store.properties.find(p => p.id === tenant.assignedPropertyId);
-      const agreement = store.agreements.find(a => a.tenantId === tenant.id && a.status === 'active');
+    const rows: ReportRow[] = tenants.flatMap(tenant => {
+      const assignedIds = tenant.assignedPropertyIds || [];
       
-      let daysRemaining = 999;
-      if (agreement?.endDate) {
-        const expiry = new Date(agreement.endDate);
-        const today = new Date();
-        daysRemaining = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      if (assignedIds.length === 0) {
+        return [{
+          tenantName: tenant.name,
+          tenantPhone: tenant.phone || 'No phone provided',
+          propertyName: 'Unassigned',
+          rentAmount: 0,
+          expiryDate: 'N/A',
+          status: 'No active lease',
+          daysRemaining: 999
+        }];
       }
 
-      return {
-        tenantName: tenant.name,
-        tenantPhone: tenant.phone || 'No phone provided',
-        propertyName: property?.name || 'Unassigned',
-        rentAmount: property?.rent || 0,
-        expiryDate: agreement?.endDate || 'N/A',
-        status: agreement?.status || 'No active lease',
-        daysRemaining
-      };
+      return assignedIds.map(pid => {
+        const property = store.properties.find(p => p.id === pid);
+        const agreement = store.agreements.find(a => a.tenantId === tenant.id && a.propertyId === pid && a.status === 'active');
+        
+        let daysRemaining = 999;
+        if (agreement?.endDate) {
+          const expiry = new Date(agreement.endDate);
+          const today = new Date();
+          daysRemaining = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        return {
+          tenantName: tenant.name,
+          tenantPhone: tenant.phone || 'No phone provided',
+          propertyName: property?.name || 'Unknown',
+          rentAmount: property?.rent || 0,
+          expiryDate: agreement?.endDate || 'N/A',
+          status: agreement?.status || 'No active lease',
+          daysRemaining
+        };
+      });
     });
 
     return rows.filter(row => 

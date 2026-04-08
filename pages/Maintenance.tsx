@@ -18,6 +18,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user, onUpdate }) => {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newIssue, setNewIssue] = useState('');
+  const [newPropertyId, setNewPropertyId] = useState(user.assignedPropertyIds?.[0] || '');
   const [newImage, setNewImage] = useState<string | null>(null);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
@@ -43,7 +44,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user, onUpdate }) => {
     setTimeout(() => {
       const freshTicket: MaintenanceTicket = {
         id: `t${Date.now()}`,
-        propertyId: user.assignedPropertyId || 'p1',
+        propertyId: newPropertyId || 'p1',
         tenantId: user.id,
         issue: newIssue,
         status: TicketStatus.OPEN,
@@ -130,9 +131,28 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user, onUpdate }) => {
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
              <div className="space-y-6">
+                <div className="space-y-4">
+                   <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Select Property</p>
+                   <div className="relative">
+                      <select 
+                        className="w-full appearance-none bg-offwhite dark:bg-black border-2 border-zinc-50 dark:border-zinc-800 rounded-2xl px-6 py-4 pr-10 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-4 focus:ring-blue-600/10"
+                        value={newPropertyId}
+                        onChange={e => setNewPropertyId(e.target.value)}
+                      >
+                         {user.assignedPropertyIds?.map(pid => {
+                            const p = store.properties.find(prop => prop.id === pid);
+                            return <option key={pid} value={pid}>{p?.name || pid}</option>;
+                         })}
+                         {(!user.assignedPropertyIds || user.assignedPropertyIds.length === 0) && (
+                            <option value="p1">Default Property</option>
+                         )}
+                      </select>
+                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+                   </div>
+                </div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Describe the fault</p>
                 <textarea 
-                  className="w-full p-8 bg-offwhite dark:bg-black border-2 border-zinc-50 dark:border-zinc-800 rounded-[2.5rem] h-64 outline-none focus:ring-4 focus:ring-blue-600/10 text-lg font-bold text-zinc-900 dark:text-white resize-none" 
+                  className="w-full p-8 bg-offwhite dark:bg-black border-2 border-zinc-50 dark:border-zinc-800 rounded-[2.5rem] h-44 outline-none focus:ring-4 focus:ring-blue-600/10 text-lg font-bold text-zinc-900 dark:text-white resize-none" 
                   placeholder="What needs fixing?" 
                   value={newIssue} 
                   onChange={e => setNewIssue(e.target.value)} 

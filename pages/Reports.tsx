@@ -34,32 +34,51 @@ const Reports: React.FC<ReportsProps> = ({ user }) => {
         .filter(p => p.agentId === user.id)
         .map(p => p.id);
       
-      tenants = tenants.filter(t => t.assignedPropertyId && myPropertyIds.includes(t.assignedPropertyId));
+      tenants = tenants.filter(t => t.assignedPropertyIds?.some(pid => myPropertyIds.includes(pid)));
     }
 
     // 3. Map to report rows
-    const rows: ReportRow[] = tenants.map(tenant => {
-      const property = store.properties.find(p => p.id === tenant.assignedPropertyId);
-      const agreement = store.agreements.find(a => a.tenantId === tenant.id && a.status === 'active');
+    const rows: ReportRow[] = tenants.flatMap(tenant => {
+      const assignedIds = tenant.assignedPropertyIds || [];
       
-      let daysRemaining = 999;
-      if (agreement?.endDate) {
-        const expiry = new Date(agreement.endDate);
-        const today = new Date();
-        daysRemaining = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      // If no properties assigned, return one unassigned row
+      if (assignedIds.length === 0) {
+        return [{
+          tenantName: tenant.name,
+          tenantPhone: tenant.phone || 'No phone provided',
+          propertyName: 'Unassigned',
+          propertyType: 'N/A',
+          propertyAddress: 'N/A',
+          rentAmount: 0,
+          expiryDate: 'N/A',
+          status: 'No active lease',
+          daysRemaining: 999
+        }];
       }
 
-      return {
-        tenantName: tenant.name,
-        tenantPhone: tenant.phone || 'No phone provided',
-        propertyName: property?.name || 'Unassigned',
-        propertyType: property?.type || 'N/A',
-        propertyAddress: property?.location || 'N/A',
-        rentAmount: property?.rent || 0,
-        expiryDate: agreement?.endDate || 'N/A',
-        status: agreement?.status || 'No active lease',
-        daysRemaining
-      };
+      return assignedIds.map(pid => {
+        const property = store.properties.find(p => p.id === pid);
+        const agreement = store.agreements.find(a => a.tenantId === tenant.id && a.propertyId === pid && a.status === 'active');
+        
+        let daysRemaining = 999;
+        if (agreement?.endDate) {
+          const expiry = new Date(agreement.endDate);
+          const today = new Date();
+          daysRemaining = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        return {
+          tenantName: tenant.name,
+          tenantPhone: tenant.phone || 'No phone provided',
+          propertyName: property?.name || 'Unknown',
+          propertyType: property?.type || 'N/A',
+          propertyAddress: property?.location || 'N/A',
+          rentAmount: property?.rent || 0,
+          expiryDate: agreement?.endDate || 'N/A',
+          status: agreement?.status || 'No active lease',
+          daysRemaining
+        };
+      });
     });
 
     // 4. Apply search term

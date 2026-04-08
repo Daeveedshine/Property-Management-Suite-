@@ -76,6 +76,20 @@ export const getStore = (): AppState => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return initialData;
   const parsed = JSON.parse(saved);
+  
+  // Migration: Convert legacy assignedPropertyId to assignedPropertyIds array
+  if (parsed.users) {
+    parsed.users = parsed.users.map((u: any) => {
+      if (u.assignedPropertyId && !u.assignedPropertyIds) {
+        u.assignedPropertyIds = [u.assignedPropertyId];
+      }
+      return u;
+    });
+  }
+  if (parsed.currentUser && parsed.currentUser.assignedPropertyId && !parsed.currentUser.assignedPropertyIds) {
+    parsed.currentUser.assignedPropertyIds = [parsed.currentUser.assignedPropertyId];
+  }
+
   if (!parsed.settings) parsed.settings = initialSettings;
   if (!parsed.formTemplates) parsed.formTemplates = initialData.formTemplates;
   return parsed;
@@ -114,9 +128,13 @@ export const initFirebaseSync = (onUpdate: (newState: AppState) => void) => {
         
         // Merge remote data with local session (currentUser)
         const currentLocal = getStore();
+        const updatedCurrentUser = currentLocal.currentUser 
+          ? remoteData.users.find(u => u.id === currentLocal.currentUser?.id) || currentLocal.currentUser 
+          : null;
+
         const mergedState = {
           ...remoteData,
-          currentUser: currentLocal.currentUser, // Keep local session
+          currentUser: updatedCurrentUser, // Keep local session with latest data
           theme: currentLocal.theme // Keep local theme preference
         };
 

@@ -25,16 +25,17 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         pendingApps: store.applications.filter(a => a.agentId === user.id && a.status === ApplicationStatus.PENDING).length
       };
     } else {
-      const myProperty = store.properties.find(p => p.id === user.assignedPropertyId);
+      const myProperties = store.properties.filter(p => user.assignedPropertyIds?.includes(p.id));
       const myTickets = store.tickets.filter(t => t.tenantId === user.id);
       const myPayments = store.payments.filter(p => p.tenantId === user.id);
-      const leaseEndDate = store.agreements.find(a => a.tenantId === user.id)?.endDate;
+      const myAgreements = store.agreements.filter(a => a.tenantId === user.id);
+      const latestAgreement = [...myAgreements].sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime())[0];
       
       return {
-        propertyName: myProperty?.name || 'N/A',
+        propertyName: myProperties.length > 1 ? `${myProperties.length} Assets` : (myProperties[0]?.name || 'N/A'),
         rentStatus: myPayments.find(p => p.status === 'pending') ? 'Pending' : 'Paid',
         activeTickets: myTickets.filter(t => t.status !== TicketStatus.RESOLVED).length,
-        leaseExpiry: leaseEndDate ? formatDate(leaseEndDate, settings) : 'N/A'
+        leaseExpiry: latestAgreement ? formatDate(latestAgreement.endDate, settings) : 'N/A'
       };
     }
   }, [user, store, settings]);

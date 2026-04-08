@@ -83,7 +83,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate, onUpdate }) =
 
       // 2. Update User Profile with Assigned Property
       const updatedUsers = store.users.map(u => 
-        u.id === selectedApp.userId ? { ...u, assignedPropertyId: propertyId } : u
+        u.id === selectedApp.userId ? { ...u, assignedPropertyIds: [...(u.assignedPropertyIds || []), propertyId] } : u
       );
 
       // 3. Link this Application record to the routed Property
@@ -253,7 +253,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate, onUpdate }) =
                
                <div className="p-10 md:p-14 space-y-16 text-black print:p-12 print:pt-4">
                   {/* ROUTING HUB: Integrated Property Assignment */}
-                  {selectedApp.status === ApplicationStatus.APPROVED && !store.users.find(u => u.id === selectedApp.userId)?.assignedPropertyId && (
+                  {selectedApp.status === ApplicationStatus.APPROVED && !store.users.find(u => u.id === selectedApp.userId)?.assignedPropertyIds?.includes(selectedApp.propertyId) && (
                     <section className="p-8 bg-blue-600/5 border-2 border-blue-600/20 rounded-[3rem] space-y-8 animate-in zoom-in-95 duration-500 print:hidden">
                        <div className="flex items-center justify-between">
                           <div className="flex items-center gap-4">

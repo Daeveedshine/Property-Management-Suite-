@@ -141,10 +141,10 @@ const App: React.FC = () => {
     if (isConfigured) {
         const unsubscribe = initFirebaseSync((newState) => {
             // Re-render UI on remote changes if current user is logged in
-            if (store.currentUser) {
+            if (newState.currentUser) {
+                setUser(newState.currentUser);
                 refreshBadges();
                 setSynced(true);
-                // Force update might be needed in complex apps, but React state change in Dashboard usually handles it via getStore() re-calls
             }
         });
         return () => unsubscribe();
