@@ -1,13 +1,14 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { User, UserRole, Property, PropertyStatus, PropertyCategory, PropertyType, ApplicationStatus, Agreement, NotificationType, MaintenanceTicket, TicketStatus, TicketPriority, Notification } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
+import { User, UserRole, Property, PropertyStatus, PropertyCategory, PropertyType, ApplicationStatus, Agreement, NotificationType, MaintenanceTicket, TicketStatus, TicketPriority, Notification, Transaction } from '../types';
 import { getStore, saveStore, formatCurrency, formatDate } from '../store';
 import { 
   MapPin, Plus, Edit, X, Wrench, Info, ArrowRight, DollarSign, 
   UserPlus, Save, Loader2, Tag, Layout, Briefcase, UserCheck, 
   Maximize2, Users, CalendarDays, Clock, FileText, ChevronDown,
   ArrowUpNarrowWide, ArrowDownWideNarrow, CalendarRange, ListFilter,
-  Search, CheckCircle2, ClipboardCheck, Building, Camera, Image as ImageIcon, AlertTriangle,
+  Search, CheckCircle2, ClipboardCheck, Building, Camera, Image as ImageIcon, AlertTriangle, CreditCard,
   Upload, Send, FileWarning, AlertOctagon, AlertCircle, Trash2, ChevronLeft, ChevronRight, Filter
 } from 'lucide-react';
 
@@ -54,6 +55,8 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
   const [noticeFileName, setNoticeFileName] = useState<string>('');
 
   const [isSaving, setIsSaving] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [pendingTenant, setPendingTenant] = useState<User | null>(null);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('none');
   const [isSortMenuOpen, setIsSortMenuOpen] = useState(false);
@@ -188,7 +191,54 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
 
   const handleAssignTenant = (tenant: User) => {
     if (!selectedProperty) return;
+    setPendingTenant(tenant);
+    setShowPaymentModal(true);
+  };
+
+  const handleTopUp = () => {
     setIsSaving(true);
+    setTimeout(() => {
+        const TOP_UP_AMOUNT = 5000;
+        const updatedUsers = store.users.map(u => 
+            u.id === user.id ? { ...u, walletBalance: (u.walletBalance || 0) + TOP_UP_AMOUNT } : u
+        );
+        
+        const newTransaction: Transaction = {
+            id: `tr_top_${Date.now()}`,
+            userId: user.id,
+            amount: TOP_UP_AMOUNT,
+            type: 'credit',
+            purpose: 'Wallet Top Up (Simulated)',
+            timestamp: new Date().toISOString(),
+            status: 'completed'
+        };
+
+        const updatedStore = {
+            ...store,
+            users: updatedUsers,
+            transactions: [newTransaction, ...store.transactions]
+        };
+
+        const finalUpdate = { ...updatedStore, currentUser: updatedUsers.find(u => u.id === user.id) || null };
+        saveStore(finalUpdate);
+        setStore(finalUpdate);
+        setIsSaving(false);
+    }, 1000);
+  };
+
+  const confirmAssignmentWithPayment = () => {
+    if (!selectedProperty || !pendingTenant) return;
+    
+    const ASSIGNMENT_FEE = 1000;
+    const currentUser = store.users.find(u => u.id === user.id);
+    
+    if (!currentUser || (currentUser.walletBalance || 0) < ASSIGNMENT_FEE) {
+      alert('Insufficient wallet balance. Please top up your account.');
+      return;
+    }
+
+    setIsSaving(true);
+    setShowPaymentModal(false);
 
     setTimeout(() => {
       const today = new Date();
@@ -199,22 +249,30 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
       const startDate = today.toISOString().split('T')[0];
       const endDate = nextYear.toISOString().split('T')[0];
 
+      // 1. Update Property
       const updatedProperties = store.properties.map(p => 
         p.id === selectedProperty.id ? { 
           ...p, 
-          tenantId: tenant.id, 
+          tenantId: pendingTenant.id, 
           status: PropertyStatus.OCCUPIED,
           rentStartDate: startDate,
           rentExpiryDate: endDate
         } : p
       );
 
-      const updatedUsers = store.users.map(u => 
-        u.id === tenant.id ? { ...u, assignedPropertyIds: [...(u.assignedPropertyIds || []), selectedProperty.id] } : u
-      );
+      // 2. Update Tenant
+      const updatedUsers = store.users.map(u => {
+        if (u.id === pendingTenant.id) {
+          return { ...u, assignedPropertyIds: [...(u.assignedPropertyIds || []), selectedProperty.id] };
+        }
+        if (u.id === user.id) {
+          return { ...u, walletBalance: (u.walletBalance || 0) - ASSIGNMENT_FEE };
+        }
+        return u;
+      });
 
       const updatedApplications = store.applications.map(app => 
-        (app.userId === tenant.id && app.status === ApplicationStatus.APPROVED)
+        (app.userId === pendingTenant.id && app.status === ApplicationStatus.APPROVED)
           ? { ...app, propertyId: selectedProperty.id }
           : app
       );
@@ -222,16 +280,26 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
       const newAgreement: Agreement = {
         id: `a${Date.now()}`,
         propertyId: selectedProperty.id,
-        tenantId: tenant.id,
+        tenantId: pendingTenant.id,
         version: 1,
         startDate,
         endDate,
         status: 'active'
       };
 
+      const newTransaction: Transaction = {
+        id: `tr_${Date.now()}`,
+        userId: user.id,
+        amount: ASSIGNMENT_FEE,
+        type: 'debit',
+        purpose: `Tenant Assignment Fee: ${selectedProperty.name}`,
+        timestamp: new Date().toISOString(),
+        status: 'completed'
+      };
+
       const notification = {
         id: `n_assign_${Date.now()}`,
-        userId: tenant.id,
+        userId: pendingTenant.id,
         title: 'Lease Activated',
         message: `Your application for ${selectedProperty.name} is complete. Your tenancy cycle starts today.`,
         type: NotificationType.SUCCESS,
@@ -246,6 +314,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
         users: updatedUsers,
         applications: updatedApplications,
         agreements: [...store.agreements, newAgreement],
+        transactions: [newTransaction, ...store.transactions],
         notifications: [notification, ...store.notifications]
       };
 
@@ -254,6 +323,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
       setSelectedProperty(updatedProperties.find(p => p.id === selectedProperty.id) || null);
       setIsSaving(false);
       setShowTenantPicker(false);
+      setPendingTenant(null);
       setTenantSearch('');
     }, 1200);
   };
@@ -292,10 +362,19 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
   };
 
   const removePropertyImage = (indexToRemove: number) => {
-    setEditFormData(prev => ({
-        ...prev,
-        images: (prev.images || []).filter((_, idx) => idx !== indexToRemove)
-    }));
+    setEditFormData(prev => {
+        const newImages = (prev.images || []).filter((_, idx) => idx !== indexToRemove);
+        // Adjust currentImageIndex if needed
+        if (currentImageIndex >= newImages.length && newImages.length > 0) {
+            setCurrentImageIndex(newImages.length - 1);
+        } else if (newImages.length === 0) {
+            setCurrentImageIndex(0);
+        }
+        return {
+            ...prev,
+            images: newImages
+        };
+    });
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -488,9 +567,10 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
   // Logic for carousel display
   const displayImages = useMemo(() => {
       if (!selectedProperty) return [];
-      if (selectedProperty.images && selectedProperty.images.length > 0) return selectedProperty.images;
+      const source = isEditing ? editFormData.images : selectedProperty.images;
+      if (source && source.length > 0) return source;
       return [`https://picsum.photos/seed/${selectedProperty.id}/800/1200`];
-  }, [selectedProperty]);
+  }, [selectedProperty, isEditing, editFormData.images]);
 
   const nextImage = (e?: React.MouseEvent) => {
       e?.stopPropagation();
@@ -1050,6 +1130,81 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                   </div>
                 ) : (
                   <>
+                    <AnimatePresence>
+                        {showPaymentModal && (
+                            <motion.div 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="fixed inset-0 bg-black/80 backdrop-blur-xl z-[100] flex items-center justify-center p-6"
+                            >
+                                <motion.div 
+                                    initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                                    exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                                    className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-[3rem] p-10 border border-white/10 shadow-2xl relative overflow-hidden"
+                                >
+                                    <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 to-indigo-600" />
+                                    
+                                    <div className="flex justify-center mb-8">
+                                        <div className="w-20 h-20 bg-blue-600/10 rounded-3xl flex items-center justify-center text-blue-600">
+                                            <CreditCard size={40} />
+                                        </div>
+                                    </div>
+
+                                    <div className="text-center space-y-4 mb-10">
+                                        <h3 className="text-3xl font-black text-zinc-900 dark:text-white tracking-tighter">Placement Fee</h3>
+                                        <p className="text-zinc-500 font-medium text-sm">
+                                            A standard administrative fee of <span className="text-zinc-900 dark:text-white font-black">₦1,000</span> is required to finalize this tenant assignment.
+                                        </p>
+                                    </div>
+
+                                    <div className="bg-zinc-50 dark:bg-black/40 p-6 rounded-3xl border border-zinc-100 dark:border-zinc-800 mb-8 space-y-4">
+                                        <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-zinc-400">
+                                            <span>Wallet Balance</span>
+                                            <span className="text-zinc-900 dark:text-white">{formatCurrency(store.users.find(u => u.id === user.id)?.walletBalance || 0, settings)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs font-bold uppercase tracking-widest text-zinc-400">
+                                            <span>Service Fee</span>
+                                            <span className="text-rose-500">- ₦1,000</span>
+                                        </div>
+                                        <div className="h-px bg-zinc-200 dark:bg-zinc-800" />
+                                        <div className="flex justify-between items-center text-sm font-black text-zinc-900 dark:text-white uppercase tracking-widest">
+                                            <span>Net Total</span>
+                                            <span>{formatCurrency((store.users.find(u => u.id === user.id)?.walletBalance || 0) - 1000, settings)}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-4">
+                                        {(store.users.find(u => u.id === user.id)?.walletBalance || 0) >= 1000 ? (
+                                            <button 
+                                                onClick={confirmAssignmentWithPayment}
+                                                disabled={isSaving}
+                                                className="w-full py-6 bg-blue-600 text-white font-black uppercase tracking-[0.2em] text-[10px] rounded-2xl shadow-xl shadow-blue-600/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+                                            >
+                                                {isSaving ? <Loader2 className="animate-spin mx-auto" /> : 'Confirm & Authorize Payment'}
+                                            </button>
+                                        ) : (
+                                            <button 
+                                                onClick={handleTopUp}
+                                                disabled={isSaving}
+                                                className="w-full py-6 bg-emerald-600 text-white font-black uppercase tracking-[0.2em] text-[10px] rounded-2xl shadow-xl shadow-emerald-600/20 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+                                            >
+                                                {isSaving ? <Loader2 className="animate-spin mx-auto" /> : 'Top Up Wallet (₦5,000)'}
+                                            </button>
+                                        )}
+                                        <button 
+                                            onClick={() => { setShowPaymentModal(false); setPendingTenant(null); }}
+                                            className="w-full py-4 text-zinc-400 font-black uppercase tracking-[0.2em] text-[9px] hover:text-rose-500 transition-colors"
+                                        >
+                                            Cancel Transaction
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
                     <div className="flex justify-between items-start mb-12">
                       <div className="space-y-4 flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-3">
@@ -1126,41 +1281,109 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
                                         </select>
                                     </InputWrapper>
 
-                                    {/* Multi-Image Upload Section */}
-                                    <div className="col-span-1 sm:col-span-2">
-                                        <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1 mb-2">Property Gallery</p>
-                                        
-                                        <div 
-                                            onClick={() => propImagesRef.current?.click()}
-                                            className="w-full h-32 rounded-[2rem] bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center cursor-pointer hover:border-blue-600/40 transition-all mb-4"
-                                        >
-                                            <ImageIcon className="text-zinc-400 mb-2" size={24} />
-                                            <p className="text-[10px] font-black uppercase text-zinc-500">Add Images</p>
-                                        </div>
-                                        <input 
-                                            type="file" 
-                                            multiple 
-                                            hidden 
-                                            ref={propImagesRef} 
-                                            accept="image/*" 
-                                            onChange={handlePropertyImagesUpload} 
-                                        />
+                                    {/* Multi-Image Gallery & Management Section */}
+                                    <div className="col-span-1 sm:col-span-2 space-y-6">
+                                        <div>
+                                            <p className="text-[9px] font-black text-zinc-500 uppercase tracking-widest ml-1 mb-4">Property Gallery Management</p>
+                                            
+                                            {/* Main Preview / Carousel for Edit Mode */}
+                                            {editFormData.images && editFormData.images.length > 0 ? (
+                                                <div className="relative h-72 md:h-96 rounded-[2.5rem] overflow-hidden mb-6 bg-zinc-100 dark:bg-zinc-900/50 group border border-white/10 shadow-2xl">
+                                                    <AnimatePresence mode="wait">
+                                                        <motion.img 
+                                                            key={currentImageIndex}
+                                                            src={editFormData.images[currentImageIndex]} 
+                                                            initial={{ opacity: 0, scale: 1.1 }}
+                                                            animate={{ opacity: 1, scale: 1 }}
+                                                            exit={{ opacity: 0, scale: 0.9 }}
+                                                            transition={{ duration: 0.4, ease: "circOut" }}
+                                                            className="w-full h-full object-cover"
+                                                            alt="Current Preview"
+                                                        />
+                                                    </AnimatePresence>
+                                                    
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
 
-                                        {editFormData.images && editFormData.images.length > 0 && (
-                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-4">
-                                                {editFormData.images.map((img, idx) => (
-                                                    <div key={idx} className="aspect-square rounded-2xl overflow-hidden relative group">
-                                                        <img src={img} alt={`Gallery ${idx}`} className="w-full h-full object-cover" />
+                                                    {editFormData.images.length > 1 && (
+                                                        <>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); prevImage(e); }}
+                                                                className="absolute left-6 top-1/2 -translate-y-1/2 p-4 bg-white/10 backdrop-blur-xl text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-white/20 border border-white/20 active:scale-90"
+                                                            >
+                                                                <ChevronLeft size={24} />
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); nextImage(e); }}
+                                                                className="absolute right-6 top-1/2 -translate-y-1/2 p-4 bg-white/10 backdrop-blur-xl text-white rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-white/20 border border-white/20 active:scale-90"
+                                                            >
+                                                                <ChevronRight size={24} />
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                    
+                                                    <div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-all translate-y-2 group-hover:translate-y-0">
                                                         <button 
-                                                            onClick={() => removePropertyImage(idx)}
-                                                            className="absolute top-1 right-1 p-1.5 bg-rose-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            onClick={() => removePropertyImage(currentImageIndex)}
+                                                            className="p-4 bg-rose-500 text-white rounded-2xl shadow-xl hover:bg-rose-600 active:scale-95 transition-all flex items-center gap-2 font-black text-[10px] uppercase tracking-widest"
+                                                            title="Remove current image"
                                                         >
-                                                            <Trash2 size={12} />
+                                                            <Trash2 size={16} /> Remove
                                                         </button>
                                                     </div>
-                                                ))}
+
+                                                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 bg-black/40 backdrop-blur-md rounded-full border border-white/10">
+                                                        <p className="text-[10px] font-black text-white uppercase tracking-widest">
+                                                            Image {currentImageIndex + 1} of {editFormData.images.length}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="h-72 md:h-96 rounded-[2.5rem] bg-white/5 border-2 border-dashed border-white/10 flex flex-col items-center justify-center mb-6">
+                                                    <ImageIcon className="text-zinc-700 dark:text-zinc-300 mb-4 opacity-20" size={64} />
+                                                    <p className="text-[10px] font-black uppercase text-zinc-500 tracking-widest">No images uploaded yet</p>
+                                                </div>
+                                            )}
+
+                                            {/* Upload Trigger */}
+                                            <div 
+                                                onClick={() => propImagesRef.current?.click()}
+                                                className="w-full py-8 rounded-[2rem] bg-blue-600/5 border-2 border-dashed border-blue-600/20 flex flex-col items-center justify-center cursor-pointer hover:bg-blue-600/10 hover:border-blue-600/40 transition-all mb-6 group"
+                                            >
+                                                <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-lg shadow-blue-600/20">
+                                                    <Plus size={24} />
+                                                </div>
+                                                <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest">Upload New Visuals</p>
+                                                <p className="text-[9px] font-bold text-zinc-400 mt-1">Supports JPG, PNG (Max 5MB)</p>
                                             </div>
-                                        )}
+                                            <input 
+                                                type="file" 
+                                                multiple 
+                                                hidden 
+                                                ref={propImagesRef} 
+                                                accept="image/*" 
+                                                onChange={handlePropertyImagesUpload} 
+                                            />
+
+                                            {/* Thumbnails Strip */}
+                                            {editFormData.images && editFormData.images.length > 0 && (
+                                                <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x">
+                                                    {editFormData.images.map((img, idx) => (
+                                                        <div 
+                                                            key={idx} 
+                                                            onClick={() => setCurrentImageIndex(idx)}
+                                                            className={`w-24 h-24 rounded-2xl overflow-hidden relative shrink-0 cursor-pointer border-4 transition-all snap-start ${idx === currentImageIndex ? 'border-blue-600 scale-105 shadow-xl shadow-blue-600/20' : 'border-transparent opacity-40 hover:opacity-100 hover:scale-105'}`}
+                                                        >
+                                                            <img src={img} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
+                                                            {idx === currentImageIndex && (
+                                                                <div className="absolute inset-0 bg-blue-600/10 flex items-center justify-center">
+                                                                    <div className="w-2 h-2 bg-white rounded-full animate-ping" />
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </>
                             ) : (

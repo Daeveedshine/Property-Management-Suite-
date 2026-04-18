@@ -62,6 +62,17 @@ export interface User {
   assignedPropertyIds?: string[];
   phone?: string;
   profilePictureUrl?: string;
+  walletBalance?: number;
+}
+
+export interface Transaction {
+  id: string;
+  userId: string;
+  amount: number;
+  type: 'debit' | 'credit';
+  purpose: string;
+  timestamp: string;
+  status: 'completed' | 'pending' | 'failed';
 }
 
 export interface Property {

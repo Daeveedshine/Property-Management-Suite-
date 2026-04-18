@@ -396,7 +396,7 @@ const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate, onUpdate }) =
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                           {Object.entries(selectedApp.customResponses || {}).map(([key, value]) => {
                              if (key === 'agentIdCode' || key === 'signature' || typeof value !== 'string') return null;
-                             if (['firstName', 'surname', 'middleName', 'dob', 'maritalStatus', 'gender', 'currentHomeAddress', 'occupation', 'familySize', 'phoneNumber', 'reasonForRelocating', 'currentLandlordName', 'currentLandlordPhone', 'verificationType', 'verificationIdNumber'].includes(key)) return null;
+                             if (['firstName', 'surname', 'middleName', 'dob', 'maritalStatus', 'gender', 'currentHomeAddress', 'occupation', 'familySize', 'phoneNumber', 'reasonForRelocating', 'currentLandlordName', 'currentLandlordPhone', 'verificationType', 'verificationIdNumber', 'verificationUrl', 'passportPhotoUrl'].includes(key)) return null;
                              
                              return <DetailRow key={key} label={key.replace(/([A-Z])/g, ' $1').trim()} value={String(value)} />;
                           })}

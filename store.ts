@@ -1,5 +1,5 @@
 
-import { User, Property, Agreement, Payment, MaintenanceTicket, Notification, UserRole, PropertyStatus, TicketStatus, TicketPriority, NotificationType, TenantApplication, ApplicationStatus, PropertyCategory, FormTemplate } from './types';
+import { User, Property, Agreement, Payment, MaintenanceTicket, Notification, UserRole, PropertyStatus, TicketStatus, TicketPriority, NotificationType, TenantApplication, ApplicationStatus, PropertyCategory, FormTemplate, Transaction } from './types';
 import { db, isConfigured } from './firebaseConfig';
 import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
@@ -34,6 +34,7 @@ interface AppState {
   notifications: Notification[];
   applications: TenantApplication[];
   formTemplates: FormTemplate[];
+  transactions: Transaction[];
   currentUser: User | null;
   theme: 'light' | 'dark';
   settings: UserSettings;
@@ -64,8 +65,38 @@ const initialData: AppState = {
   payments: [],
   tickets: [],
   notifications: [],
-  applications: [],
+  applications: [
+    {
+      id: 'mock_app_1',
+      userId: 'tenant_1',
+      propertyId: 'p1',
+      agentId: 'agent_1',
+      status: ApplicationStatus.PENDING,
+      submissionDate: new Date().toISOString(),
+      firstName: 'John',
+      surname: 'Doe',
+      middleName: 'Michael',
+      dob: '1990-01-01',
+      maritalStatus: 'Single',
+      gender: 'Male',
+      currentHomeAddress: '123 Fake Street, Lagos',
+      occupation: 'Software Engineer',
+      familySize: 1,
+      phoneNumber: '08012345678',
+      reasonForRelocating: 'Work',
+      currentLandlordName: 'Mr. Smith',
+      currentLandlordPhone: '08098765432',
+      verificationType: 'National ID',
+      verificationIdNumber: '123456789',
+      agentIdCode: 'A101',
+      signature: 'JD',
+      applicationDate: new Date().toISOString(),
+      riskScore: 85,
+      aiRecommendation: 'Highly recommended due to stable income.'
+    }
+  ],
   formTemplates: [],
+  transactions: [],
   currentUser: null,
   theme: 'dark',
   settings: initialSettings,
@@ -83,12 +114,22 @@ export const getStore = (): AppState => {
       if (u.assignedPropertyId && !u.assignedPropertyIds) {
         u.assignedPropertyIds = [u.assignedPropertyId];
       }
+      if (u.role === UserRole.AGENT && u.walletBalance === undefined) {
+        u.walletBalance = 5000; // Give every agent ₦5000 starter balance for this prototype
+      }
       return u;
     });
   }
-  if (parsed.currentUser && parsed.currentUser.assignedPropertyId && !parsed.currentUser.assignedPropertyIds) {
-    parsed.currentUser.assignedPropertyIds = [parsed.currentUser.assignedPropertyId];
+  if (parsed.currentUser) {
+    if (parsed.currentUser.assignedPropertyId && !parsed.currentUser.assignedPropertyIds) {
+      parsed.currentUser.assignedPropertyIds = [parsed.currentUser.assignedPropertyId];
+    }
+    if (parsed.currentUser.role === UserRole.AGENT && parsed.currentUser.walletBalance === undefined) {
+      parsed.currentUser.walletBalance = 5000;
+    }
   }
+
+  if (!parsed.transactions) parsed.transactions = [];
 
   if (!parsed.settings) parsed.settings = initialSettings;
   if (!parsed.formTemplates) parsed.formTemplates = initialData.formTemplates;

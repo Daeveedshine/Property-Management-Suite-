@@ -15,14 +15,24 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const { settings } = store;
 
   const stats = useMemo(() => {
-    if (user.role === UserRole.AGENT) {
-      const revenue = store.payments.filter(p => p.status === 'paid').reduce((acc, curr) => acc + curr.amount, 0);
+      if (user.role === UserRole.AGENT) {
+      const myPropertyIds = store.properties.filter(p => p.agentId === user.id).map(p => p.id);
+      const revenue = store.payments
+        .filter(p => p.status === 'paid' && myPropertyIds.includes(p.propertyId))
+        .reduce((acc, curr) => acc + curr.amount, 0);
+      
+      const currentUser = store.users.find(u => u.id === user.id);
+      
+      const pendingApps = store.applications.filter(a => a.agentId === user.id && a.status === ApplicationStatus.PENDING).length;
+      const openTickets = store.tickets.filter(t => t.status !== TicketStatus.RESOLVED && myPropertyIds.includes(t.propertyId)).length;
+
       return {
         totalProperties: store.properties.filter(p => p.agentId === user.id).length,
         occupiedProperties: store.properties.filter(p => p.agentId === user.id && p.status === PropertyStatus.OCCUPIED).length,
-        pendingTickets: store.tickets.filter(t => t.status === TicketStatus.OPEN).length, 
+        pendingTickets: openTickets, 
         monthlyRevenue: formatCurrency(revenue, settings),
-        pendingApps: store.applications.filter(a => a.agentId === user.id && a.status === ApplicationStatus.PENDING).length
+        pipelineCount: pendingApps + openTickets,
+        walletBalance: formatCurrency(currentUser?.walletBalance || 0, settings)
       };
     } else {
       const myProperties = store.properties.filter(p => user.assignedPropertyIds?.includes(p.id));
@@ -84,13 +94,12 @@ const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         )}
       </header>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${user.role === UserRole.AGENT ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-6`}>
         {user.role === UserRole.AGENT ? (
           <>
             <StatCard label="Portfolio" value={stats.totalProperties} icon={Building} color="blue" />
-            <StatCard label="Pipeline" value={stats.pendingApps} icon={UserPlus} color="purple" />
-            <StatCard label="Repairs" value={stats.pendingTickets} icon={AlertTriangle} color="orange" />
-            <StatCard label="Revenue" value={stats.monthlyRevenue} icon={TrendingUp} color="emerald" />
+            <StatCard label="Wallet" value={stats.walletBalance} icon={TrendingUp} color="emerald" />
+            <StatCard label="Agent Revenue" value={stats.monthlyRevenue} icon={TrendingUp} color="orange" />
           </>
         ) : (
           <>
@@ -163,14 +172,14 @@ const StatCard = ({ label, value, icon: Icon, color }: any) => {
   };
 
   return (
-    <div className="glass-card p-8 rounded-[2.8rem] border-white/20 hover:scale-105 transition-all duration-500 cursor-default group">
+    <div className="glass-card p-8 rounded-[2.8rem] border-white/20 hover:scale-[1.02] active:scale-95 transition-all duration-500 cursor-pointer group shadow-sm hover:shadow-xl">
       <div className="flex items-center justify-between mb-5">
-        <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest opacity-60 group-hover:opacity-100 transition-opacity">{label}</p>
+        <p className="text-[9px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-[0.2em] opacity-60 group-hover:opacity-100 transition-opacity">{label}</p>
         <div className={`p-3 rounded-2xl border ${colors[color]}`}>
           <Icon className="w-5 h-5" />
         </div>
       </div>
-      <p className="text-2xl font-black text-zinc-900 dark:text-white truncate tracking-tighter leading-none">{value}</p>
+      <p className="text-2xl font-black text-zinc-900 dark:text-white tracking-tighter leading-none">{value}</p>
     </div>
   );
 };
