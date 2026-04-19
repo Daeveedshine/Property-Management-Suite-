@@ -1,40 +1,22 @@
 
-import firebase from 'firebase/compat/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeApp } from 'firebase/app';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import firebaseConfig from './firebase-applet-config.json';
 
-// ------------------------------------------------------------------
-// FIREBASE CONFIGURATION
-// ------------------------------------------------------------------
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const auth = getAuth(app);
+export const isConfigured = true;
 
-const firebaseConfig = {
-  apiKey: "AIzaSyANIBIA_Vl-T9C-zaRUTSfGE9AuWdJcxGY",
-  authDomain: "spaceyaa-10d75.firebaseapp.com",
-  projectId: "spaceyaa-10d75",
-  storageBucket: "spaceyaa-10d75.firebasestorage.app",
-  messagingSenderId: "626014132233",
-  appId: "1:626014132233:web:03e8eb0b82ab919f8040d8",
-  measurementId: "G-8XNGK1MF1T"
-};
-
-// Check if config is set up
-// We check if apiKey is present and not a generic placeholder.
-const isConfigured = !!firebaseConfig.apiKey && firebaseConfig.apiKey !== "AIzaSyANIBIA_Vl-T9C-zaRUTSfGE9AuWdJcxGY";
-
-let app;
-let db: any;
-
-if (isConfigured) {
+// Validate Connection to Firestore on boot
+async function testConnection() {
   try {
-    // Initialize modular app via compat for robustness against type issues
-    app = firebase.initializeApp(firebaseConfig);
-    // Initialize modular firestore (uses default app)
-    db = getFirestore();
-    console.log("🔥 Firebase initialized successfully.");
+    await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    console.error("Firebase initialization failed:", error);
+    if(error instanceof Error && error.message.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration.");
+    }
   }
-} else {
-  console.warn("⚠️ Firebase credentials missing in firebaseConfig.ts. Falling back to LocalStorage only.");
 }
-
-export { db, isConfigured };
+testConnection();

@@ -137,9 +137,11 @@ const App: React.FC = () => {
     // Initial sync
     syncVisualSettings();
 
+    let unsubscribe: () => void = () => {};
+
     // Initialize Firebase Sync
     if (isConfigured) {
-        const unsubscribe = initFirebaseSync((newState) => {
+        unsubscribe = initFirebaseSync((newState) => {
             // Re-render UI on remote changes if current user is logged in
             if (newState.currentUser) {
                 setUser(newState.currentUser);
@@ -147,7 +149,6 @@ const App: React.FC = () => {
                 setSynced(true);
             }
         });
-        return () => unsubscribe();
     }
 
     const timer = setTimeout(() => {
@@ -158,7 +159,11 @@ const App: React.FC = () => {
       }
       setIsLoading(false);
     }, 2000);
-    return () => clearTimeout(timer);
+    
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, []);
 
   const toggleTheme = () => {
@@ -189,7 +194,15 @@ const App: React.FC = () => {
     syncVisualSettings(); // Refresh visual state on login
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      const { auth } = await import('./firebaseConfig');
+      if (auth) {
+        await auth.signOut();
+      }
+    } catch(e) {
+      console.error(e);
+    }
     const store = getStore();
     store.currentUser = null;
     saveStore(store);
