@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { User, Notification, NotificationType } from '../types';
-import { getStore, saveStore } from '../store';
+import { getStore, saveStore, useAppStore } from '../store';
 import { Bell, Check, Trash2, Info, AlertTriangle, AlertCircle, CheckCircle2, MoreVertical, Search, Download } from 'lucide-react';
 
 interface NotificationsProps {
@@ -11,7 +11,7 @@ interface NotificationsProps {
 }
 
 const Notifications: React.FC<NotificationsProps> = ({ user, onRefreshCount, onNavigate }) => {
-  const [store, setStore] = useState(getStore());
+  const [store, setStore] = useAppStore();
   const [searchTerm, setSearchTerm] = useState('');
 
   const notifications = useMemo(() => {

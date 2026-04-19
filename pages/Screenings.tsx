@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { User, UserRole, TenantApplication, ApplicationStatus, NotificationType, PropertyStatus, Agreement } from '../types';
-import { getStore, saveStore } from '../store';
+import { getStore, saveStore, useAppStore } from '../store';
 import { 
   ClipboardCheck, CheckCircle, XCircle, 
   Search, ChevronRight, ShieldCheck, Mail, Phone, Calendar, Download,
@@ -16,7 +16,7 @@ interface ScreeningsProps {
 }
 
 const Screenings: React.FC<ScreeningsProps> = ({ user, onNavigate, onUpdate }) => {
-  const [store, setStore] = useState(getStore());
+  const [store, setStore] = useAppStore();
   const [selectedApp, setSelectedApp] = useState<TenantApplication | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedImage, setExpandedImage] = useState<string | null>(null);

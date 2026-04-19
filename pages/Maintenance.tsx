@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { User, UserRole, MaintenanceTicket, TicketStatus, TicketPriority, NotificationType } from '../types';
-import { getStore, saveStore } from '../store';
+import { getStore, saveStore, useAppStore } from '../store';
 import { Plus, CheckCircle2, Clock, AlertCircle, Wrench, X, ChevronDown, Camera, Image as ImageIcon, Sparkles, Loader2, Maximize2, Building } from 'lucide-react';
 
 interface MaintenanceProps {
@@ -10,12 +10,10 @@ interface MaintenanceProps {
 }
 
 const Maintenance: React.FC<MaintenanceProps> = ({ user, onUpdate }) => {
-  const [store, setStore] = useState(getStore());
-  const [tickets, setTickets] = useState<MaintenanceTicket[]>(
-    user.role === UserRole.AGENT || user.role === UserRole.ADMIN
+  const [store, setStore] = useAppStore();
+  const tickets = user.role === UserRole.AGENT || user.role === UserRole.ADMIN
       ? store.tickets 
-      : store.tickets.filter(t => t.tenantId === user.id)
-  );
+      : store.tickets.filter(t => t.tenantId === user.id);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newIssue, setNewIssue] = useState('');
   const [newPropertyId, setNewPropertyId] = useState(user.assignedPropertyIds?.[0] || '');
@@ -71,7 +69,6 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user, onUpdate }) => {
       };
       saveStore(newState);
       setStore(newState);
-      setTickets([freshTicket, ...tickets]);
       setNewIssue('');
       setNewImage(null);
       setIsSubmitting(false);
@@ -99,7 +96,6 @@ const Maintenance: React.FC<MaintenanceProps> = ({ user, onUpdate }) => {
     };
     saveStore(newState);
     setStore(newState);
-    setTickets(user.role === UserRole.TENANT ? updatedTickets.filter(t => t.tenantId === user.id) : updatedTickets);
     if (onUpdate) onUpdate();
   };
 

@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, UserRole, Property, PropertyStatus, PropertyCategory, PropertyType, ApplicationStatus, Agreement, NotificationType, MaintenanceTicket, TicketStatus, TicketPriority, Notification, Transaction } from '../types';
-import { getStore, saveStore, formatCurrency, formatDate } from '../store';
+import { getStore, saveStore, formatCurrency, formatDate, useAppStore } from '../store';
 import { 
   MapPin, Plus, Edit, X, Wrench, Info, ArrowRight, DollarSign, 
   UserPlus, Save, Loader2, Tag, Layout, Briefcase, UserCheck, 
@@ -29,7 +29,7 @@ const PROPERTY_TYPES: PropertyType[] = [
 ];
 
 const Properties: React.FC<PropertiesProps> = ({ user }) => {
-  const [store, setStore] = useState(getStore());
+  const [store, setStore] = useAppStore();
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showTenantPicker, setShowTenantPicker] = useState(false);
@@ -271,11 +271,7 @@ const Properties: React.FC<PropertiesProps> = ({ user }) => {
         return u;
       });
 
-      const updatedApplications = store.applications.map(app => 
-        (app.userId === pendingTenant.id && app.status === ApplicationStatus.APPROVED)
-          ? { ...app, propertyId: selectedProperty.id }
-          : app
-      );
+      const updatedApplications = store.applications;
 
       const newAgreement: Agreement = {
         id: `a${Date.now()}`,

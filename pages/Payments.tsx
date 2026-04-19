@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { User, UserRole, Transaction } from '../types';
-import { getStore, saveStore, formatCurrency } from '../store';
+import { getStore, saveStore, formatCurrency, useAppStore } from '../store';
 import { motion, AnimatePresence } from 'motion/react';
 import { CreditCard, Sparkles, ShieldCheck, Wallet, Receipt, TrendingUp, TrendingDown, Clock, ArrowUpRight, Plus, X, Loader2 } from 'lucide-react';
 
@@ -10,7 +10,7 @@ interface PaymentsProps {
 }
 
 const Payments: React.FC<PaymentsProps> = ({ user }) => {
-  const [store, setStore] = useState(getStore());
+  const [store, setStore] = useAppStore();
   const { settings } = store;
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [depositAmount, setDepositAmount] = useState('5000');

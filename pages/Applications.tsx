@@ -1,7 +1,9 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { User, TenantApplication, ApplicationStatus, NotificationType, UserRole, FormTemplate, FormSection, FormField, FieldType } from '../types';
-import { getStore, saveStore } from '../store';
+import { getStore, saveStore, useAppStore } from '../store';
+import { doc, getDoc, query, collection, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebaseConfig';
 import { 
   CheckCircle, ArrowRight, ArrowLeft, Building, ShieldCheck, 
   Loader2, MapPin, UserCheck, Search, Camera, Fingerprint, 
@@ -94,7 +96,7 @@ interface ApplicationsProps {
 }
 
 const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate, onUpdate }) => {
-  const [store, setStore] = useState(getStore());
+  const [store, setStore] = useAppStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Views: 'gate' | 'form' | 'history'
@@ -118,26 +120,59 @@ const Applications: React.FC<ApplicationsProps> = ({ user, onNavigate, onUpdate 
     }
   }, []);
 
-  const validateAgent = (id: string) => {
+  const validateAgent = async (id: string) => {
+    const cleanId = id.trim();
+    if (!cleanId) return;
     setIsSearchingAgent(true);
-    setTimeout(() => {
-      const agent = store.users.find(u => u.id.toLowerCase() === id.toLowerCase() && u.role === UserRole.AGENT);
+    
+    try {
+      let agent: User | null = null;
+
+      // 1. Try Direct UID Match (Case Sensitive)
+      const agentDoc = await getDoc(doc(db, 'users', cleanId));
+      if (agentDoc.exists() && agentDoc.data().role === UserRole.AGENT) {
+        agent = agentDoc.data() as User;
+      }
+
+      // 2. Try Email Match (If ID looks like an email)
+      if (!agent && cleanId.includes('@')) {
+        const q = query(collection(db, 'users'), where('email', '==', cleanId.toLowerCase()), where('role', '==', UserRole.AGENT));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          agent = snap.docs[0].data() as User;
+        }
+      }
+
+      // 3. Try Name Match (Last Resort)
+      if (!agent) {
+        const q = query(collection(db, 'users'), where('name', '==', cleanId), where('role', '==', UserRole.AGENT));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          agent = snap.docs[0].data() as User;
+        }
+      }
+
       if (agent) {
         setTargetAgent(agent);
-        // Use existing template or FALLBACK to DEFAULT if none exists
-        const template = store.formTemplates.find(t => t.agentId === agent.id) || DEFAULT_TEMPLATE;
+        setTargetAgentId(agent.id); // Normalize state to the real ID
+        
+        const templateDoc = await getDoc(doc(db, 'formTemplates', agent.id));
+        const template = templateDoc.exists() ? (templateDoc.data() as FormTemplate) : DEFAULT_TEMPLATE;
         
         setActiveTemplate(template);
         setViewMode('form');
-        
-        // Pre-fill Agent ID in form data implicitly
-        setFormData(prev => ({ ...prev, agentIdCode: agent.id }));
+        setFormData(prev => ({ ...prev, agentIdCode: agent?.id }));
       } else {
-        // Allow fallback or show error
         setTargetAgent(null);
+        alert('Agent not found. Please check the Agent ID, Name, or Email.');
       }
+    } catch (error) {
+      console.error('Error validating agent:', error);
+      setTargetAgent(null);
+      alert('Error finding Agent. Wait a moment and try again.');
+    } finally {
       setIsSearchingAgent(false);
-    }, 600);
+    }
   };
 
   const handleInputChange = (key: string, value: any) => {

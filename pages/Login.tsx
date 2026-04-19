@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
-import { getStore, saveStore } from '../store';
+import { getStore } from '../store';
+import { auth, db } from '../firebaseConfig';
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { handleFirestoreError } from '../lib/firebaseErrors';
 import { Apple, Mail, Phone, ArrowRight, Home, Users, UserCheck, Smartphone, Lock, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Logo } from '../App';
 
@@ -26,66 +30,57 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<UserRole>(UserRole.TENANT);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    const store = getStore();
-    const user = store.users.find(u => u.email.toLowerCase() === email.toLowerCase());
-    
-    if (user) {
-      onLogin(user);
-    } else {
-      setError('Account not found. Please register or check details.');
-    }
+    setError('Email/Password auth is not configured. Please use Google Auth below.');
   };
 
   const handleRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    
-    if (!name || !email || !password || !confirmPassword) {
-      setError('Please fill in all required fields.');
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
-    const store = getStore();
-    if (store.users.find(u => u.email.toLowerCase() === email.toLowerCase())) {
-      setError('This email is already registered.');
-      return;
-    }
-
-    const uniqueId = role === UserRole.AGENT 
-      ? `AGT-${Math.random().toString(36).substr(2, 6).toUpperCase()}` 
-      : `u${Date.now()}`;
-
-    const newUser: User = { id: uniqueId, name, email, role, phone };
-    const newState = { ...store, users: [...store.users, newUser] };
-    saveStore(newState);
-    onLogin(newUser);
+    setError('Email/Password auth is not configured. Please use Google Auth below.');
   };
 
-  const simulateSocialAuth = (provider: string) => {
+  const signInWithGoogle = async () => {
     setError('');
-    const socialEmail = `social_${provider.toLowerCase()}@example.com`;
-    const store = getStore();
-    let user = store.users.find(u => u.email === socialEmail);
-    
-    if (!user) {
-      const uniqueId = role === UserRole.AGENT 
-        ? `AGT-SOCIAL-${Math.random().toString(36).substr(2, 4).toUpperCase()}` 
-        : `u_social_${Date.now()}`;
-
-      user = { id: uniqueId, name: `${provider} User`, email: socialEmail, role: role, phone: '' };
-      const newState = { ...store, users: [...store.users, user] };
-      saveStore(newState);
+    setIsLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      
+      const userRef = doc(db, 'users', result.user.uid);
+      const userSnap = await getDoc(userRef);
+      
+      let currentUserProfile: User;
+      
+      if (userSnap.exists()) {
+        currentUserProfile = userSnap.data() as User;
+      } else {
+        currentUserProfile = {
+          id: result.user.uid,
+          name: result.user.displayName || 'New User',
+          email: result.user.email || '',
+          role: role,
+          phone: result.user.phoneNumber || '',
+          profilePictureUrl: result.user.photoURL || '',
+          walletBalance: role === UserRole.AGENT ? 5000 : 0,
+          assignedPropertyIds: []
+        };
+        try {
+          await setDoc(userRef, currentUserProfile);
+        } catch (e: any) {
+           handleFirestoreError(e, 'create', '/users/' + result.user.uid, result.user);
+        }
+      }
+      
+      onLogin(currentUserProfile);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Google Authentication failed');
+    } finally {
+      setIsLoading(false);
     }
-    onLogin(user);
   };
 
   return (
@@ -202,11 +197,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-4">
-                <button onClick={() => simulateSocialAuth('Apple')} className="flex-1 py-5 glass-input text-white rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-white/10 transition-all active:scale-95">
+                <button type="button" onClick={() => alert('Apple auth not supported in prototype.')} className="flex-1 py-5 glass-input text-white rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-white/10 transition-all active:scale-95">
                   <Apple size={20} /> Apple
                 </button>
-                <button onClick={() => simulateSocialAuth('Google')} className="flex-1 py-5 glass-input text-white rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-white/10 transition-all active:scale-95">
-                  <GoogleIcon /> Google
+                <button type="button" disabled={isLoading} onClick={signInWithGoogle} className="flex-1 py-5 glass-input text-white rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-white/10 transition-all active:scale-95 disabled:opacity-50">
+                  <GoogleIcon /> {isLoading ? 'Authenticating...' : 'Google'}
                 </button>
               </div>
             </div>
